@@ -52,7 +52,7 @@ uninit_initialize (struct page *page, void *kva) {
 	void *aux = uninit->aux;
 
 	/* TODO: You may need to fix this function. */
-	/* @todo(vm-min): page_initializer()가 page->operations를 anon/file ops로
+	/* TODO VM-11: page_initializer()가 page->operations를 anon/file ops로
 	 * 바꾼 뒤 init(page, aux)가 frame 내용을 채운다. init 실패 시 aux,
 	 * page type, page/frame link rollback 책임을 정해야 한다. */
 	return uninit->page_initializer (page, uninit->type, kva) &&
@@ -68,7 +68,7 @@ uninit_destroy (struct page *page) {
 	struct uninit_page *uninit UNUSED = &page->uninit;
 	/* TODO: Fill this function.
 	 * TODO: If you don't have anything to do, just return. */
-	/* @todo(vm-min): never-faulted lazy page가 process exit에서 사라질 때
+	/* TODO VM-19: never-faulted lazy page가 process exit에서 사라질 때
 	 * uninit->aux가 동적 할당되어 있으면 여기서 해제한다. file reference를
 	 * aux가 소유한다면 file_close() 책임도 이 경로에 둔다. */
 }

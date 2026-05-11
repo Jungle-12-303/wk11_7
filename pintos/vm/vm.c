@@ -16,9 +16,9 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
-	/* @todo(vm-min): frame table/list와 lock을 초기화한다. eviction을 아직
-	 * 구현하지 않더라도 vm_get_frame()에서 만든 frame을 추적해야 process exit
-	 * cleanup과 이후 eviction으로 자연스럽게 이어진다. */
+	/* TODO VM-04: frame table/list와 lock을 초기화한다. eviction을 아직
+	 * 구현하지 않더라도 vm_get_frame()이 만든 frame을 추적해야 cleanup과
+	 * 이후 eviction 구현으로 이어진다. */
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -56,15 +56,15 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
-		/* @todo(vm-min): upage를 pg_round_down() 기준으로 맞추고, type에 따라
+		/* TODO VM-05: upage를 pg_round_down() 기준으로 맞추고 type에 따라
 		 * anon_initializer 또는 file_backed_initializer를 고른다. malloc()으로
 		 * struct page를 만들고 uninit_new(page, upage, init, type, aux,
 		 * initializer)를 호출한 뒤 writable 같은 접근권한 metadata를 page에
-		 * 저장할 위치를 마련한다. */
+		 * 저장한다. */
 
 		/* TODO: Insert the page into the spt. */
-		/* @todo(vm-min): spt_insert_page() 성공 시 true를 반환한다. 실패하면
-		 * aux 소유권이 누구에게 있는지 정하고 page/aux를 누수 없이 해제한다. */
+		/* TODO VM-06: spt_insert_page() 성공 시 true를 반환한다. 실패하면
+		 * aux 소유권을 정해 page/aux를 누수 없이 해제한다. */
 	}
 err:
 	return false;
@@ -75,7 +75,7 @@ struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
-	/* @todo(vm-min): va를 pg_round_down()으로 page base에 맞춘 뒤 SPT에서
+	/* TODO VM-07: va를 pg_round_down()으로 page base에 맞춘 뒤 SPT에서
 	 * 정확히 같은 user VA의 struct page를 찾는다. page fault, mmap overlap
 	 * 검사, vm_claim_page()가 모두 이 함수를 공통 입구로 사용한다. */
 
@@ -88,7 +88,7 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
-	/* @todo(vm-min): page->va가 이미 SPT에 있으면 실패해야 한다. 성공하면
+	/* TODO VM-08: page->va가 이미 SPT에 있으면 실패해야 한다. 성공하면
 	 * page-rounded VA를 key로 등록한다. mmap-overlap/code/data/stack 검사의
 	 * 신뢰성이 여기서 갈린다. */
 
@@ -97,6 +97,9 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
+	/* TODO VM-09: page를 SPT 자료구조에서 먼저 제거한 뒤 vm_dealloc_page()를
+	 * 호출한다. munmap(), process exit, 실패 rollback이 같은 제거 경로를
+	 * 재사용하게 만든다. */
 	vm_dealloc_page (page);
 	return true;
 }
@@ -106,7 +109,7 @@ static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
-	/* @todo(vm-min): 처음에는 eviction을 구현하지 않고 NULL/PANIC 경로로 둘 수
+	/* TODO VM-20: 처음에는 eviction을 구현하지 않고 NULL/PANIC 경로로 둘 수
 	 * 있지만, swap tests를 돌리려면 frame table에서 victim을 고르는 정책
 	 * clock/second chance 등을 여기에 둔다. */
 
@@ -119,7 +122,7 @@ static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
-	/* @todo(vm-min): victim->page에 대해 swap_out(page)을 호출하고, old PTE를
+	/* TODO VM-21: victim->page에 대해 swap_out(page)을 호출하고, old PTE를
 	 * 제거한 뒤 victim->page를 NULL로 되돌려 재사용 가능한 frame으로 반환한다. */
 
 	return NULL;
@@ -133,7 +136,7 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
-	/* @todo(vm-min): palloc_get_page(PAL_USER)로 kva를 얻고 struct frame을
+	/* TODO VM-10: palloc_get_page(PAL_USER)로 kva를 얻고 struct frame을
 	 * 할당해 frame->kva=kva, frame->page=NULL로 초기화한다. palloc 실패 시
 	 * vm_evict_frame()으로 재사용 frame을 얻는다. */
 
@@ -145,7 +148,7 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
-	/* @todo(vm-min): addr을 page boundary로 내린 뒤 VM_ANON stack page를
+	/* TODO VM-13: addr을 page boundary로 내린 뒤 VM_ANON stack page를
 	 * SPT에 등록하고 즉시 vm_claim_page()한다. USER_STACK 경계와 최대 stack
 	 * 크기 제한을 함께 검사해야 한다. */
 }
@@ -153,7 +156,7 @@ vm_stack_growth (void *addr UNUSED) {
 /* Handle the fault on write_protected page */
 static bool
 vm_handle_wp (struct page *page UNUSED) {
-	/* @todo(vm-min): copy-on-write를 구현하지 않는 최소 cycle에서는 false를
+	/* TODO VM-22: copy-on-write를 구현하지 않는 최소 cycle에서는 false를
 	 * 반환해 write-protected fault를 죽인다. COW를 할 때는 새 frame 복사와
 	 * writable PTE 재설치를 여기서 처리한다. */
 }
@@ -165,10 +168,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
-	/* @todo(vm-min): kernel address, NULL, not_present=false인 protection fault,
+	/* TODO VM-12: kernel address, NULL, not_present=false인 protection fault,
 	 * write인데 page가 writable이 아닌 경우를 걸러낸다. */
 	/* TODO: Your code goes here */
-	/* @todo(vm-min): addr을 pg_round_down()해서 SPT에서 page를 찾는다. 없으면
+	/* TODO VM-12: addr을 pg_round_down()해서 SPT에서 page를 찾는다. 없으면
 	 * f->rsp 근처 fault인지 검사해 stack growth 후보만 vm_stack_growth()로
 	 * 만든다. 찾은 page는 vm_do_claim_page()로 frame/PTE/swap_in을 연결한다. */
 
@@ -188,7 +191,7 @@ bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
-	/* @todo(vm-min): va를 page boundary로 내리고 spt_find_page()로 page를
+	/* TODO VM-11: va를 page boundary로 내리고 spt_find_page()로 page를
 	 * 찾는다. page가 없거나 이미 frame이 있으면 정책에 맞게 처리하고, 있으면
 	 * vm_do_claim_page(page)를 호출한다. */
 
@@ -205,7 +208,7 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-	/* @todo(vm-min): pml4_set_page(thread_current()->pml4, page->va,
+	/* TODO VM-11: pml4_set_page(thread_current()->pml4, page->va,
 	 * frame->kva, writable)를 호출한다. 실패하면 page/frame link와 frame
 	 * allocation을 되돌려야 한다. 성공한 뒤 swap_in(page, frame->kva)로
 	 * lazy loader/file/anon 초기화를 실행한다. */
@@ -216,7 +219,7 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
-	/* @todo(vm-min): include/vm/vm.h의 supplemental_page_table 안에 둔
+	/* TODO VM-03: include/vm/vm.h의 supplemental_page_table 안에 둔
 	 * hash/table/list를 초기화한다. process_exec(), process_fork()의 새
 	 * thread가 반드시 빈 SPT를 갖고 시작해야 한다. */
 }
@@ -225,7 +228,7 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
-	/* @todo(vm-min): fork 최소 통과를 위해 src의 각 page를 dst에 복제한다.
+	/* TODO VM-18: fork 최소 통과를 위해 src의 각 page를 dst에 복제한다.
 	 * UNINIT은 aux를 deep copy하거나 file reference를 다시 열고, resident
 	 * page는 child page를 만들고 claim한 뒤 frame bytes를 복사한다. */
 }
@@ -235,7 +238,7 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	/* @todo(vm-min): SPT의 모든 page를 순회하며 dirty mmap page는 write-back,
+	/* TODO VM-19: SPT의 모든 page를 순회하며 dirty mmap page는 write-back,
 	 * resident frame은 palloc_free_page(), file/aux metadata는 해제한다.
 	 * 순회 중 SPT entry 제거와 page destroy 순서를 분명히 해야 한다. */
 }

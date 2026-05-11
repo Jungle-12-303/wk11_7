@@ -180,6 +180,9 @@ page_fault (struct intr_frame *f) {
 	/*
 	 * 프로젝트 3 이후를 위한 코드다.
 	 */
+	/* TODO VM-12: page fault의 공통 입구다. fault_addr, user, write,
+	 * not_present를 그대로 vm_try_handle_fault()에 넘기고, 여기서 false가
+	 * 돌아오면 복구 불가능한 fault로 보고 기존 종료 경로를 타게 한다. */
 	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
 		return;
 #endif
@@ -204,4 +207,3 @@ page_fault (struct intr_frame *f) {
 			user ? "user" : "kernel");
 	kill (f);
 }
-
