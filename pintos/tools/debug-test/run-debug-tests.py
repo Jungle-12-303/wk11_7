@@ -31,6 +31,10 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
+def strip_c_comments(content: str) -> str:
+    return re.sub(r"/\*.*?\*/|//[^\n]*", "", content, flags=re.DOTALL)
+
+
 def discover(tests_dir: Path) -> list[DebugTest]:
     tests: list[DebugTest] = []
     for source in sorted(tests_dir.rglob("*.c")):
@@ -63,7 +67,7 @@ def validate_sources(tests: list[DebugTest]) -> None:
             errors.append(f"{test.rel}: cannot read source: {exc}")
             continue
 
-        matches = pattern.findall(content)
+        matches = pattern.findall(strip_c_comments(content))
         expected = test.function.removeprefix("debug_test_")
         if expected not in matches:
             found = ", ".join(matches) if matches else "none"
