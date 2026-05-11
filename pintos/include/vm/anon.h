@@ -5,9 +5,8 @@ struct page;
 enum vm_type;
 
 struct anon_page {
-	/* @todo(vm-min): stack/lazy executable page가 resident 상태로만 도는
-	 * 최소 cycle에서는 비워둘 수 있다. swap까지 연결할 때는 swap slot index,
-	 * swapped 여부 같은 metadata를 여기에 둔다. */
+	/* TODO VM-14: anonymous page metadata를 둔다. 최소 lazy/stack 구현만 보면
+	 * 비워둘 수 있지만, swap까지 가면 swap slot index와 swapped 여부가 필요하다. */
 };
 
 void vm_anon_init (void);

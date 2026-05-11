@@ -43,10 +43,13 @@ struct thread;
  * 이 구조체의 미리 정의된 멤버는 삭제하거나 수정하지 말 것. */
 struct page {
 	const struct page_operations *operations;
-	void *va;              /* 유저 공간 기준 주소 */
-	struct frame *frame;   /* frame에서 page로 되돌아오는 참조 */
+	void *va;            /* 유저 공간 기준 주소 */
+	struct frame *frame; /* frame에서 page로 되돌아오는 참조 */
 
-	/* 구현부 */
+	/* TODO VM-01: SPT와 fault 처리의 기준이 되는 page metadata를 추가한다.
+	 * 최소 구현에서는 hash_elem/list_elem, writable 여부, stack page 여부를
+	 * 이 구조체 안에 두면 spt_find_page(), vm_do_claim_page(),
+	 * vm_try_handle_fault()가 같은 정보를 공유할 수 있다. */
 
 	/* 타입별 데이터는 union에 묶여 있다.
 	 * 각 함수는 현재 어떤 union 멤버를 써야 하는지 자동으로 판단한다. */
@@ -64,9 +67,9 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
-	/* @todo(vm-min): frame table을 구현하면 list_elem/hash_elem 등 전역 frame 목록에
-	 * 연결할 필드를 추가한다. eviction 없이 최소 lazy cycle만 볼 때도
-	 * vm_get_frame()이 할당한 frame을 추적할 수 있어야 cleanup이 가능하다. */
+	/* TODO VM-02: frame table 관리를 위한 list_elem과 필요하면 pinned/owner
+	 * 정보를 추가한다. eviction을 나중에 붙이더라도 vm_get_frame()이 할당한
+	 * frame을 전역 목록에서 추적할 수 있어야 한다. */
 };
 
 /* 페이지 연산용 함수 테이블.
@@ -81,40 +84,40 @@ struct page_operations {
 };
 
 #define swap_in(page, v) (page)->operations->swap_in ((page), v)
-#define swap_out(page) (page)->operations->swap_out (page)
-#define destroy(page) \
-	if ((page)->operations->destroy) (page)->operations->destroy (page)
+#define swap_out(page)   (page)->operations->swap_out (page)
+#define destroy(page)                \
+	if ((page)->operations->destroy) \
+	(page)->operations->destroy (page)
 
 /* 현재 프로세스 메모리 공간의 표현.
  * 이 구조체 설계는 특정 방식으로 강제하지 않는다.
  * 설계는 전적으로 구현자 선택이다. */
 struct supplemental_page_table {
-	/* @todo(vm-min): page-rounded user VA -> struct page*를 찾을 수 있는
-	 * hash/table/list 필드를 둔다. 최소 cycle은 spt_find_page(),
-	 * spt_insert_page(), supplemental_page_table_kill()이 이 자료구조를
-	 * 같은 기준으로 사용해야 돈다. */
+	/* TODO VM-03: page-rounded user VA를 key로 struct page*를 찾는 자료구조를
+	 * 둔다. 보통 struct hash를 쓰며 spt_find_page(), spt_insert_page(),
+	 * supplemental_page_table_kill()이 모두 같은 key 기준을 써야 한다. */
 };
 
 #include "threads/thread.h"
 void supplemental_page_table_init (struct supplemental_page_table *spt);
 bool supplemental_page_table_copy (struct supplemental_page_table *dst,
-		struct supplemental_page_table *src);
+                                   struct supplemental_page_table *src);
 void supplemental_page_table_kill (struct supplemental_page_table *spt);
 struct page *spt_find_page (struct supplemental_page_table *spt,
-		void *va);
+                            void *va);
 bool spt_insert_page (struct supplemental_page_table *spt, struct page *page);
 void spt_remove_page (struct supplemental_page_table *spt, struct page *page);
 
 void vm_init (void);
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
-		bool write, bool not_present);
+                          bool write, bool not_present);
 
 #define vm_alloc_page(type, upage, writable) \
 	vm_alloc_page_with_initializer ((type), (upage), (writable), NULL, NULL)
 bool vm_alloc_page_with_initializer (enum vm_type type, void *upage,
-		bool writable, vm_initializer *init, void *aux);
+                                     bool writable, vm_initializer *init, void *aux);
 void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
 
-#endif  /* VM_VM_H */
+#endif /* VM_VM_H */
