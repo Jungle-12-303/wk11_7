@@ -64,6 +64,9 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	/* @todo(vm-min): frame table을 구현하면 list_elem/hash_elem 등 전역 frame 목록에
+	 * 연결할 필드를 추가한다. eviction 없이 최소 lazy cycle만 볼 때도
+	 * vm_get_frame()이 할당한 frame을 추적할 수 있어야 cleanup이 가능하다. */
 };
 
 /* 페이지 연산용 함수 테이블.
@@ -86,6 +89,10 @@ struct page_operations {
  * 이 구조체 설계는 특정 방식으로 강제하지 않는다.
  * 설계는 전적으로 구현자 선택이다. */
 struct supplemental_page_table {
+	/* @todo(vm-min): page-rounded user VA -> struct page*를 찾을 수 있는
+	 * hash/table/list 필드를 둔다. 최소 cycle은 spt_find_page(),
+	 * spt_insert_page(), supplemental_page_table_kill()이 이 자료구조를
+	 * 같은 기준으로 사용해야 돈다. */
 };
 
 #include "threads/thread.h"
