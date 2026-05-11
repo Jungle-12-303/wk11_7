@@ -1,4 +1,9 @@
 #include "tests/threads/tests.h"
+#if defined(__has_include)
+#if __has_include("tools/debug-test/generated/debug-tests.h")
+#include "tools/debug-test/generated/debug-tests.h"
+#endif
+#endif
 #include <debug.h>
 #include <string.h>
 #include <stdio.h>
@@ -38,6 +43,11 @@ static const struct test tests[] =
     {"mlfqs-nice-2", test_mlfqs_nice_2},
     {"mlfqs-nice-10", test_mlfqs_nice_10},
     {"mlfqs-block", test_mlfqs_block},
+#if defined(__has_include)
+#if __has_include("tools/debug-test/generated/debug-tests.inc")
+#include "tools/debug-test/generated/debug-tests.inc"
+#endif
+#endif
   };
 
 static const char *test_name;
@@ -99,4 +109,3 @@ pass (void)
 {
   printf ("(%s) PASS\n", test_name);
 }
-
