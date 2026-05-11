@@ -65,4 +65,7 @@ uninit_destroy (struct page *page) {
 	struct uninit_page *uninit UNUSED = &page->uninit;
 	/* TODO: Fill this function.
 	 * TODO: If you don't have anything to do, just return. */
+	/* @todo(vm-min): never-faulted lazy page가 process exit에서 사라질 때
+	 * uninit->aux가 동적 할당되어 있으면 여기서 해제한다. file reference를
+	 * aux가 소유한다면 file_close() 책임도 이 경로에 둔다. */
 }

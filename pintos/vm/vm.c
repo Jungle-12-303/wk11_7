@@ -174,6 +174,8 @@ static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
+	/* @todo(vm-min): victim->page에 대해 swap_out(page)을 호출하고, old PTE를
+	 * 제거한 뒤 victim->page를 NULL로 되돌려 재사용 가능한 frame으로 반환한다. */
 
 	return NULL;
 }
@@ -440,4 +442,7 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	/* @todo(vm-min): SPT의 모든 page를 순회하며 dirty mmap page는 write-back,
+	 * resident frame은 palloc_free_page(), file/aux metadata는 해제한다.
+	 * 순회 중 SPT entry 제거와 page destroy 순서를 분명히 해야 한다. */
 }
