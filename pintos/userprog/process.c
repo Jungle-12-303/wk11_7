@@ -1209,8 +1209,8 @@ static bool install_page(void* upage, void* kpage, bool writable) {
 
 #else
 /*
- * 여기부터의 코드는 project 3 이후에 사용된다.
- * project 2만을 위한 함수를 구현하려면 위쪽 블록에 구현하라.
+ * 여기부터의 코드는 프로젝트 3 이후에 사용된다.
+ * 프로젝트 2만을 위한 함수를 구현하려면 위쪽 블록에 구현하라.
  */
 
 static bool

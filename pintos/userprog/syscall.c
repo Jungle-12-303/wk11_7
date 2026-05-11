@@ -155,10 +155,6 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		f->R.rax = tell (f->R.rdi);
 		break;
 #ifdef VM
-	/* @todo(vm-min): 여기에 SYS_MMAP/SYS_MUNMAP case를 추가한다.
-	 * SYS_MMAP은 user args(addr, length, writable, fd, offset)를 검증하고
-	 * process_get_file(fd)로 file을 얻은 뒤 do_mmap()에 전달한다.
-	 * SYS_MUNMAP은 addr 검증 후 do_munmap(addr)를 호출한다. */
 #endif
 	default:
 		break;

@@ -6,11 +6,11 @@
 enum vm_type {
 	/* 아직 초기화되지 않은 페이지 */
 	VM_UNINIT = 0,
-	/* 파일과 관련 없는 페이지, 즉 anonymous 페이지 */
+	/* 파일과 관련 없는 페이지, 즉 익명 페이지 */
 	VM_ANON = 1,
 	/* 파일과 관련된 페이지 */
 	VM_FILE = 2,
-	/* 페이지 캐시를 담는 페이지, project 4용 */
+	/* 페이지 캐시를 담는 페이지, 프로젝트 4용 */
 	VM_PAGE_CACHE = 3,
 
 	/* 상태를 저장하는 비트 플래그 */
@@ -38,13 +38,13 @@ struct thread;
 
 /* "page"의 표현.
  * 일종의 "부모 클래스" 역할을 하며,
- * uninit_page, file_page, anon_page, page cache(project4)라는
+ * uninit_page, file_page, anon_page, 페이지 캐시(프로젝트 4)라는
  * 네 가지 "자식 클래스"를 가진다.
  * 이 구조체의 미리 정의된 멤버는 삭제하거나 수정하지 말 것. */
 struct page {
 	const struct page_operations *operations;
 	void *va;              /* 유저 공간 기준 주소 */
-	struct frame *frame;   /* frame에서 page로 되돌아오는 참조 */
+	struct frame *frame;   /* 프레임에서 page로 되돌아오는 참조 */
 
 	/* 구현부 */
 	/* HOSEOK'S CODE */
@@ -72,8 +72,8 @@ struct frame {
 };
 
 /* 페이지 연산용 함수 테이블.
- * C에서 "interface"를 구현하는 한 가지 방식이다.
- * "method" 테이블을 구조체 멤버로 넣고,
+ * C에서 "인터페이스"를 구현하는 한 가지 방식이다.
+ * "메서드" 테이블을 구조체 멤버로 넣고,
  * 필요할 때마다 그 함수를 호출한다. */
 struct page_operations {
 	bool (*swap_in) (struct page *, void *);

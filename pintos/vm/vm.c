@@ -1,4 +1,4 @@
-/* vm.c: Generic interface for virtual memory objects. */
+/* vm.c: 가상 메모리 객체의 공통 인터페이스. */
 
 #include <string.h>
 #include "threads/malloc.h"
@@ -17,7 +17,7 @@ void
 vm_init (void) {
 	vm_anon_init ();
 	vm_file_init ();
-#ifdef EFILESYS  /* For project 4 */
+#ifdef EFILESYS  /* 프로젝트 4용 */
 	pagecache_init ();
 #endif
 	register_inspect_intr ();
@@ -137,8 +137,7 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct page *found_page = hash_entry(found, struct page, hash_elem);
 	return found_page;
 }
-
-/* Insert PAGE into spt with validation. */
+/* PAGE를 검증한 뒤 SPT에 삽입한다. */
 bool
 spt_insert_page (struct supplemental_page_table *spt,
 		struct page *page) {
@@ -173,9 +172,7 @@ vm_get_victim (void) {
 static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
-	/* TODO: swap out the victim and return the evicted frame. */
-	/* @todo(vm-min): victim->page에 대해 swap_out(page)을 호출하고, old PTE를
-	 * 제거한 뒤 victim->page를 NULL로 되돌려 재사용 가능한 frame으로 반환한다. */
+	/* TODO: 희생 페이지를 swap out하고 비워진 프레임을 반환한다. */
 
 	return NULL;
 }
@@ -379,14 +376,14 @@ vm_do_claim_page (struct page *page) {
 	return swap_in (page, frame->kva);
 }
 
-/* Initialize new supplemental page table */
+/* 새 보조 페이지 테이블을 초기화한다. */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
 	ASSERT(hash_init(&spt->hash_table, page_hash, page_less, NULL));
 	ASSERT(hash_empty(&spt->hash_table));
 }
 
-/* Copy supplemental page table from src to dst */
+/* src의 보조 페이지 테이블을 dst로 복사한다. */
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
                               struct supplemental_page_table *src UNUSED) {
@@ -437,12 +434,9 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
   return true;
 }
 
-/* Free the resource hold by the supplemental page table */
+/* 보조 페이지 테이블이 가진 자원을 해제한다. */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
-	/* TODO: Destroy all the supplemental_page_table hold by thread and
-	 * TODO: writeback all the modified contents to the storage. */
-	/* @todo(vm-min): SPT의 모든 page를 순회하며 dirty mmap page는 write-back,
-	 * resident frame은 palloc_free_page(), file/aux metadata는 해제한다.
-	 * 순회 중 SPT entry 제거와 page destroy 순서를 분명히 해야 한다. */
+	/* TODO: thread가 가진 모든 supplemental_page_table을 파괴하고, 수정된
+	 * 내용을 저장소에 모두 writeback한다. */
 }
