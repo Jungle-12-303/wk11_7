@@ -17,7 +17,7 @@ void
 vm_init (void) {
 	vm_anon_init ();
 	vm_file_init ();
-#ifdef EFILESYS  /* 프로젝트 4용 */
+#ifdef EFILESYS /* 프로젝트 4용 */
 	pagecache_init ();
 #endif
 	register_inspect_intr ();
@@ -33,10 +33,10 @@ enum vm_type
 page_get_type (struct page *page) {
 	int ty = VM_TYPE (page->operations->type);
 	switch (ty) {
-		case VM_UNINIT:
-			return VM_TYPE (page->uninit.type);
-		default:
-			return ty;
+	case VM_UNINIT:
+		return VM_TYPE (page->uninit.type);
+	default:
+		return ty;
 	}
 }
 
@@ -44,7 +44,7 @@ page_get_type (struct page *page) {
 static struct spt_entry *spt_entry_from_page (struct page *page);
 static uint64_t spt_entry_hash (const struct hash_elem *e, void *aux);
 static bool spt_entry_less (const struct hash_elem *a,
-		const struct hash_elem *b, void *aux);
+                            const struct hash_elem *b, void *aux);
 static void spt_entry_destroy (struct hash_elem *e, void *aux);
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
@@ -79,26 +79,28 @@ page_less (const struct hash_elem *a, const struct hash_elem *b,
 
 static struct spt_entry *
 spt_entry_from_page (struct page *page) {
-	return (struct spt_entry *) ((char *) page
-			- offsetof (struct spt_entry, page));
+	return (struct spt_entry *) ((char *) page - offsetof (struct spt_entry, page));
 }
 
 static uint64_t
-spt_entry_hash (const struct hash_elem *e UNUSED, void *aux UNUSED) {
-	/* TODO: SPT 엔트리 해시 함수 구현 */
-	return 0;
+spt_entry_hash (const struct hash_elem *e, void *aux UNUSED) {
+	struct spt_entry *entry = hash_entry (e, struct spt_entry, hash_elem);
+	return hash_bytes (&entry->page.va, sizeof entry->page.va);
 }
 
 static bool
-spt_entry_less (const struct hash_elem *a UNUSED,
-		const struct hash_elem *b UNUSED, void *aux UNUSED) {
-	/* TODO: SPT 엔트리 비교 함수 구현 */
-	return false;
+spt_entry_less (const struct hash_elem *a,
+                const struct hash_elem *b, void *aux UNUSED) {
+	struct spt_entry *left_entry = hash_entry (a, struct spt_entry, hash_elem);
+	struct spt_entry *right_entry = hash_entry (b, struct spt_entry, hash_elem);
+	return (uintptr_t) left_entry->page.va < (uintptr_t) right_entry->page.va;
 }
 
 static void
-spt_entry_destroy (struct hash_elem *e UNUSED, void *aux UNUSED) {
-	/* TODO: SPT 엔트리 해제 함수 구현 */
+spt_entry_destroy (struct hash_elem *e, void *aux UNUSED) {
+	struct spt_entry *entry = hash_entry (e, struct spt_entry, hash_elem);
+	destroy (&entry->page);
+	free (entry);
 }
 
 /* 초기화 함수를 가진 대기 상태 페이지 객체를 만든다. 페이지가 필요하면 직접
