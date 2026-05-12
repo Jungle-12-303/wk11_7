@@ -79,26 +79,45 @@ page_less (const struct hash_elem *a, const struct hash_elem *b,
 
 static struct spt_entry *
 spt_entry_from_page (struct page *page) {
+	if (page == NULL)
+		return NULL;
+
 	return (struct spt_entry *) ((char *) page - offsetof (struct spt_entry, page));
 }
 
 static uint64_t
 spt_entry_hash (const struct hash_elem *e, void *aux UNUSED) {
-	struct spt_entry *entry = hash_entry (e, struct spt_entry, hash_elem);
+	struct spt_entry *entry;
+
+	if (e == NULL)
+		return 0;
+
+	entry = hash_entry (e, struct spt_entry, hash_elem);
 	return hash_bytes (&entry->page.va, sizeof entry->page.va);
 }
 
 static bool
 spt_entry_less (const struct hash_elem *a,
                 const struct hash_elem *b, void *aux UNUSED) {
-	struct spt_entry *left_entry = hash_entry (a, struct spt_entry, hash_elem);
-	struct spt_entry *right_entry = hash_entry (b, struct spt_entry, hash_elem);
+	struct spt_entry *left_entry;
+	struct spt_entry *right_entry;
+
+	if (a == NULL || b == NULL)
+		return false;
+
+	left_entry = hash_entry (a, struct spt_entry, hash_elem);
+	right_entry = hash_entry (b, struct spt_entry, hash_elem);
 	return (uintptr_t) left_entry->page.va < (uintptr_t) right_entry->page.va;
 }
 
 static void
 spt_entry_destroy (struct hash_elem *e, void *aux UNUSED) {
-	struct spt_entry *entry = hash_entry (e, struct spt_entry, hash_elem);
+	struct spt_entry *entry;
+
+	if (e == NULL)
+		return;
+
+	entry = hash_entry (e, struct spt_entry, hash_elem);
 	destroy (&entry->page);
 	free (entry);
 }
@@ -365,6 +384,9 @@ vm_handle_write_protect_fault (void *addr, bool write) {
  * DO NOT MODIFY THIS FUNCTION. */
 void
 vm_dealloc_page (struct page *page) {
+	if (page == NULL)
+		return;
+
 	destroy (page);
 	free (page);
 }
