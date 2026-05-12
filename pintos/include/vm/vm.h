@@ -1,6 +1,7 @@
 #ifndef VM_VM_H
 #define VM_VM_H
 #include <stdbool.h>
+#include "hash.h"
 #include "threads/palloc.h"
 #include "hash.h"
 enum vm_type {
@@ -62,6 +63,12 @@ struct page {
 		struct page_cache page_cache;
 #endif
 	};
+};
+
+/* SPT 해시 테이블에 들어갈 페이지 엔트리. */
+struct spt_entry {
+	struct page page;
+	struct hash_elem hash_elem;
 };
 
 /* "frame"의 표현. */

@@ -41,6 +41,11 @@ page_get_type (struct page *page) {
 }
 
 /* 보조 함수들 */
+static struct spt_entry *spt_entry_from_page (struct page *page);
+static uint64_t spt_entry_hash (const struct hash_elem *e, void *aux);
+static bool spt_entry_less (const struct hash_elem *a,
+		const struct hash_elem *b, void *aux);
+static void spt_entry_destroy (struct hash_elem *e, void *aux);
 static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
@@ -71,6 +76,30 @@ page_less (const struct hash_elem *a, const struct hash_elem *b,
 	return page_one->va < page_two->va;
 }
 
+
+static struct spt_entry *
+spt_entry_from_page (struct page *page) {
+	return (struct spt_entry *) ((char *) page
+			- offsetof (struct spt_entry, page));
+}
+
+static uint64_t
+spt_entry_hash (const struct hash_elem *e UNUSED, void *aux UNUSED) {
+	/* TODO: SPT 엔트리 해시 함수 구현 */
+	return 0;
+}
+
+static bool
+spt_entry_less (const struct hash_elem *a UNUSED,
+		const struct hash_elem *b UNUSED, void *aux UNUSED) {
+	/* TODO: SPT 엔트리 비교 함수 구현 */
+	return false;
+}
+
+static void
+spt_entry_destroy (struct hash_elem *e UNUSED, void *aux UNUSED) {
+	/* TODO: SPT 엔트리 해제 함수 구현 */
+}
 
 /* 초기화 함수를 가진 대기 상태 페이지 객체를 만든다. 페이지가 필요하면 직접
  * 만들지 말고 이 함수나 vm_alloc_page()를 통해 만들어야 한다. */
