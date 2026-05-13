@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include "threads/malloc.h"
+#include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
