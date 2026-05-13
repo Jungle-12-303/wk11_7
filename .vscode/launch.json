@@ -27,10 +27,6 @@
                 {
                     "text": "source ${workspaceFolder}/.vscode/pintos-debug.gdb",
                     "ignoreFailures": true
-                },
-                {
-                    "text": "rbreak ^debug_test_",
-                    "ignoreFailures": false
                 }
             ]
         },
