@@ -26,7 +26,11 @@
                 },
                 {
                     "text": "source ${workspaceFolder}/.vscode/pintos-debug.gdb",
-                    "ignoreFailures": true
+                    "ignoreFailures": false
+                },
+                {
+                    "text": "source ${workspaceFolder}/pintos/tools/debug-test/generated/debug-breakpoints.gdb",
+                    "ignoreFailures": false
                 }
             ]
         },
