@@ -1488,6 +1488,13 @@ install_page (void *upage, void *kpage, bool writable) {
  * 프로젝트 2만을 위한 함수를 구현하려면 위쪽 블록에 구현하라.
  */
 
+struct lazy_load_arg {
+	struct file *file;
+	off_t ofs;
+	size_t read_bytes;
+	size_t zero_bytes;
+};
+
 static bool
 lazy_load_segment (struct page *page, void *aux_) {
 	struct lazy_load_arg *aux = aux_;
@@ -1540,13 +1547,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (ofs % PGSIZE == 0);
 
 	while (read_bytes > 0 || zero_bytes > 0) {
-		/*
-		 * 이 페이지를 어떻게 채울지 계산한다.
-		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
-		 * 마지막 PAGE_ZERO_BYTES 바이트를 0으로 채운다.
-		 */
+		// PAGE_READ_BYTES 바이트를 읽고  PAGE_ZERO_BYTES 바이트를 0으로 채울 크기 계산
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+		struct lazy_load_arg *aux = malloc (sizeof *aux);
 
 		struct lazy_load_arg * aux = malloc(sizeof *aux);
 		RETURN_VALUE_IF (aux == NULL, false);
