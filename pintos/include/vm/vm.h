@@ -2,6 +2,7 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "lib/kernel/hash.h"
 
 enum vm_type {
 	/* 아직 초기화되지 않은 페이지 */
@@ -51,6 +52,9 @@ struct page {
 	 * 이 구조체 안에 두면 spt_find_page(), vm_do_claim_page(),
 	 * vm_try_handle_fault()가 같은 정보를 공유할 수 있다. */
 
+	/* 구현부 */
+	struct hash_elem hash_elem;
+
 	/* 타입별 데이터는 union에 묶여 있다.
 	 * 각 함수는 현재 어떤 union 멤버를 써야 하는지 자동으로 판단한다. */
 	union {
@@ -92,11 +96,14 @@ struct page_operations {
 /* 현재 프로세스 메모리 공간의 표현.
  * 이 구조체 설계는 특정 방식으로 강제하지 않는다.
  * 설계는 전적으로 구현자 선택이다. */
+
+/* spt 안에 va를 key로 해서 struct page 찾는 자료구조가 필요함. hash page 하나 들어감 */
 struct supplemental_page_table {
-	/* TODO VM-03: page-rounded user VA를 key로 struct page*를 찾는 자료구조를
-	 * 둔다. 보통 struct hash를 쓰며 spt_find_page(), spt_insert_page(),
-	 * supplemental_page_table_kill()이 모두 같은 key 기준을 써야 한다. */
+	struct hash hash_page;
 };
+
+uint64_t page_hash (const struct hash_elem *e, void *aux);
+bool page_less (const struct hash_elem *a, const struct hash_elem *b, void *aux);
 
 #include "threads/thread.h"
 void supplemental_page_table_init (struct supplemental_page_table *spt);

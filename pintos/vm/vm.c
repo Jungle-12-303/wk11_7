@@ -10,7 +10,7 @@ void
 vm_init (void) {
 	vm_anon_init ();
 	vm_file_init ();
-#ifdef EFILESYS  /* For project 4 */
+#ifdef EFILESYS /* For project 4 */
 	pagecache_init ();
 #endif
 	register_inspect_intr ();
@@ -28,10 +28,10 @@ enum vm_type
 page_get_type (struct page *page) {
 	int ty = VM_TYPE (page->operations->type);
 	switch (ty) {
-		case VM_UNINIT:
-			return VM_TYPE (page->uninit.type);
-		default:
-			return ty;
+	case VM_UNINIT:
+		return VM_TYPE (page->uninit.type);
+	default:
+		return ty;
 	}
 }
 
@@ -40,14 +40,29 @@ static struct frame *vm_get_victim (void);
 static bool vm_do_claim_page (struct page *page);
 static struct frame *vm_evict_frame (void);
 
+/* 어떤 page가 몇 번 버킷으로 갈지 결정하는 해시값 만들기 */
+uint64_t
+page_hash (const struct hash_elem *e, void *aux UNUSED) {
+	const struct page *page = hash_entry (e, struct page, hash_elem);
+	return hash_bytes (&page->va, sizeof page->va);
+}
+
+/* 버킷 안에서 같은 page인지 비교하기 */
+bool
+page_less (const struct hash_elem *a, const struct hash_elem *b,
+           void *aux UNUSED) {
+	const struct page *pa = hash_entry (a, struct page, hash_elem);
+	const struct page *pb = hash_entry (b, struct page, hash_elem);
+	return pa->va < pb->va;
+}
+
 /* Create the pending page object with initializer. If you want to create a
  * page, do not create it directly and make it through this function or
  * `vm_alloc_page`. */
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
-		vm_initializer *init, void *aux) {
-
-	ASSERT (VM_TYPE(type) != VM_UNINIT)
+                                vm_initializer *init, void *aux) {
+	ASSERT (VM_TYPE (type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
@@ -85,7 +100,7 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 /* Insert PAGE into spt with validation. */
 bool
 spt_insert_page (struct supplemental_page_table *spt UNUSED,
-		struct page *page UNUSED) {
+                 struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
 	/* TODO VM-08: page->va가 이미 SPT에 있으면 실패해야 한다. 성공하면
@@ -108,7 +123,7 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
-	 /* TODO: The policy for eviction is up to you. */
+	/* TODO: The policy for eviction is up to you. */
 	/* TODO VM-20: 처음에는 eviction을 구현하지 않고 NULL/PANIC 경로로 둘 수
 	 * 있지만, swap tests를 돌리려면 frame table에서 victim을 고르는 정책
 	 * clock/second chance 등을 여기에 둔다. */
@@ -164,7 +179,7 @@ vm_handle_wp (struct page *page UNUSED) {
 /* Return true on success */
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+                     bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
@@ -216,18 +231,16 @@ vm_do_claim_page (struct page *page) {
 	return swap_in (page, frame->kva);
 }
 
-/* Initialize new supplemental page table */
+/* SPT의 hash_table을 page_hash/page_less 규칙으로 초기화한다 */
 void
-supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
-	/* TODO VM-03: include/vm/vm.h의 supplemental_page_table 안에 둔
-	 * hash/table/list를 초기화한다. process_exec(), process_fork()의 새
-	 * thread가 반드시 빈 SPT를 갖고 시작해야 한다. */
+supplemental_page_table_init (struct supplemental_page_table *spt) {
+	hash_init (&spt->hash_page, page_hash, page_less, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+                              struct supplemental_page_table *src UNUSED) {
 	/* TODO VM-18: fork 최소 통과를 위해 src의 각 page를 dst에 복제한다.
 	 * UNINIT은 aux를 deep copy하거나 file reference를 다시 열고, resident
 	 * page는 child page를 만들고 claim한 뒤 frame bytes를 복사한다. */
