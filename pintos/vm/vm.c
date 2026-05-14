@@ -85,27 +85,26 @@ err:
 	return false;
 }
 
-/* Find VA from spt and return page. On error, return NULL. */
+/* 찾고 싶은 va를 pg_round_down
+    임시 page.va에 넣기
+    hash_find
+    찾은 hash_elem을 struct page로 변환(=hash_elem을 멤버로 포함하고 있는 struct page의 시작 주소를 구한다는 뜻) */
 struct page *
-spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *page = NULL;
-	/* TODO: Fill this function. */
-	/* TODO VM-07: va를 pg_round_down()으로 page base에 맞춘 뒤 SPT에서
-	 * 정확히 같은 user VA의 struct page를 찾는다. page fault, mmap overlap
-	 * 검사, vm_claim_page()가 모두 이 함수를 공통 입구로 사용한다. */
-
-	return page;
+spt_find_page (struct supplemental_page_table *spt, void *va) {
+	struct page real_page;
+	struct hash_elem *e;
+	real_page.va = pg_round_down (va);
+	e = hash_find (&spt->hash_page, &real_page.hash_elem); /* e와 같은 요소 찾아서 반환 */
+	if (e == NULL)
+		return NULL;
+	return hash_entry (e, struct page, hash_elem);
 }
 
-/* Insert PAGE into spt with validation. */
+/* page->va 기준으로 hash에 넣기 */
 bool
 spt_insert_page (struct supplemental_page_table *spt UNUSED,
                  struct page *page UNUSED) {
 	int succ = false;
-	/* TODO: Fill this function. */
-	/* TODO VM-08: page->va가 이미 SPT에 있으면 실패해야 한다. 성공하면
-	 * page-rounded VA를 key로 등록한다. mmap-overlap/code/data/stack 검사의
-	 * 신뢰성이 여기서 갈린다. */
 
 	return succ;
 }
