@@ -113,11 +113,12 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED, struct page *page U
 	return succ;
 }
 
+/* page를 SPT 자료구조에서 먼저 제거한 뒤 vm_dealloc_page()를
+ * 호출한다. munmap(), process exit, 실패 rollback이 같은 제거 경로를
+ * 재사용하게 만든다. */
+/* 이제 이 페이지 안 쓸거니까 삭제한다 */
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
-	/* TODO VM-09: page를 SPT 자료구조에서 먼저 제거한 뒤 vm_dealloc_page()를
-	 * 호출한다. munmap(), process exit, 실패 rollback이 같은 제거 경로를
-	 * 재사용하게 만든다. */
 	vm_dealloc_page (page);
 	return true;
 }
@@ -146,21 +147,36 @@ vm_evict_frame (void) {
 	return NULL;
 }
 
-/* palloc() and get frame. If there is no available page, evict the page
- * and return it. This always return valid address. That is, if the user pool
- * memory is full, this function evicts the frame to get the available memory
- * space.*/
+/* user pool에서 실제 RAM frame 하나를 확보하고, 커널이 그 RAM을 다룰 수 있도록 kva를 반환하는 함수
+palloc()으로 페이지를 할당받아 frame을 얻는다.
+(이 아래부터는 다음에 구현하라고 깃북에 적혀있음)
+사용 가능한 페이지가 없으면, 기존 페이지 하나를 eviction 해서 그 공간을 확보한 뒤 반환한다.
+이 함수는 항상 유효한 주소를 반환한다.
+즉, 유저 풀 메모리가 가득 차 있으면 사용 중인 frame 하나를 내쫓아서(evict) 사용 가능한 메모리 공간을 만든다.*/
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = NULL;
+	struct frame *frame;
 	/* TODO: Fill this function. */
 	/* TODO VM-10: palloc_get_page(PAL_USER)로 kva를 얻고 struct frame을
 	 * 할당해 frame->kva=kva, frame->page=NULL로 초기화한다. palloc 실패 시
-	 * vm_evict_frame()으로 재사용 frame을 얻는다. */
+	 * vm_evict_frame()으로 재사용 frame을 얻는다
+	 * palloc_get_page를 호출하여 사용자 풀에서 새로운 물리 페이지를 가져옵니다.
+	 */
+	void *kva;
+	kva = palloc_get_page (PAL_USER);
+	if (kva == NULL)
+		PANIC ("todo");
 
+	frame = malloc (sizeof *frame);
+	if (frame == NULL)
+		PANIC ("todo");
+
+	frame->kva = kva;
+	frame->page = NULL;
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
-	return frame;
+
+	return frame; /* 초기화된 frame을 반환 */
 }
 
 /* Growing the stack. */
