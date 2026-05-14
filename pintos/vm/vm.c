@@ -100,12 +100,16 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	return hash_entry (e, struct page, hash_elem);
 }
 
-/* page->va 기준으로 hash에 넣기 */
+/* SPT에 새 struct page를 등록하려는 함수
+같은 va가 있으면 false
+같은 va가 없으면 true */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED,
-                 struct page *page UNUSED) {
+spt_insert_page (struct supplemental_page_table *spt UNUSED, struct page *page UNUSED) {
 	int succ = false;
-
+	struct hash_elem *old;
+	old = hash_insert (&spt->hash_page, &page->hash_elem);
+	if (old == NULL)
+		succ = true;
 	return succ;
 }
 
