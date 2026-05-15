@@ -171,7 +171,7 @@ vm_get_frame (void) {
 	if (frame == NULL)
 		PANIC ("todo");
 
-	frame->kva = kva;
+	frame->kva = kva; /* 실제 4KB 물리 메모리에 접근할 커널 가상주소 */
 	frame->page = NULL;
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -220,34 +220,57 @@ vm_dealloc_page (struct page *page) {
 	free (page);
 }
 
-/* Claim the page that allocate on VA. */
+/* VA로 SPT에서 page를 찾고, 아직 frame이 없는 page를 실제 메모리에 올리는 것 */
 bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
-	/* TODO: Fill this function */
-	/* TODO VM-11: va를 page boundary로 내리고 spt_find_page()로 page를
-	 * 찾는다. page가 없거나 이미 frame이 있으면 정책에 맞게 처리하고, 있으면
+	struct supplemental_page_table *spt = &thread_current ()->spt;
+
+	/* TODO VM-11: va를 page boundary로 내리고 spt_find_page()로 page를 찾는다.
+	 page가 없거나 이미 frame이 있으면 정책에 맞게 처리하고, 있으면
 	 * vm_do_claim_page(page)를 호출한다. */
+
+	va = pg_round_down (va);
+	page = spt_find_page (spt, va);
+
+	if (page == NULL) {
+		return false;
+	}
+	if (page->frame != NULL) {
+		return true;
+	}
 
 	return vm_do_claim_page (page);
 }
 
-/* Claim the PAGE and set up the mmu. */
+/*
+1. frame 확보
+   vm_get_frame()
+2. page <-> frame 연결
+3. PML4 매핑 추가
+   pml4_set_page()
+4. 실제 데이터 로드
+   swap_in()
+5. 성공 반환
+보조 페이지 테이블에 있던 PAGE를 실제 메모리 프레임에 올린 뒤,
+CPU/MMU가 해당 가상 주소로 접근할 수 있도록 va -> kva 매핑을 만든다.
+*/
+
+/* 실제 frame 할당, PML4 매핑, swap_in 수행
+SPT에 있던 struct page를 실제 물리 frame에 올리고, PML4에 매핑한 뒤, 내용을 채우는 함수 */
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
 
-	/* Set links */
-	frame->page = page;
-	page->frame = frame;
+	/* 양방향 연결 */
+	frame->page = page;  /* 물리 frame이 어떤 가상 page를 담고 있는지 기록 */
+	page->frame = frame; /* 가상 page가 어느 물리 frame에 올라와 있는지도 기록 */
 
-	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-	/* TODO VM-11: pml4_set_page(thread_current()->pml4, page->va,
-	 * frame->kva, writable)를 호출한다. 실패하면 page/frame link와 frame
-	 * allocation을 되돌려야 한다. 성공한 뒤 swap_in(page, frame->kva)로
-	 * lazy loader/file/anon 초기화를 실행한다. */
-
-	return swap_in (page, frame->kva);
+	/* 현재 실행 중인 thread의 PML4에 page->va  →  frame->kva 매핑을 추가 */
+	if (!pml4_set_page (thread_current ()->pml4, page->va, frame->kva, page->writable)) {
+		return false;
+	}
+	return swap_in (page, frame->kva); /* swap_in()으로 실제 데이터를 frame에 채우기 */
 }
 
 /* SPT의 hash_table을 page_hash/page_less 규칙으로 초기화한다 */
