@@ -13,6 +13,8 @@
 
 static struct list frame_table;
 
+#define STACK_MAX ((uintptr_t) 1 << 20) /* 유저 스택 최대 크기: 1MB */
+
 /* 각 하위 시스템의 초기화 코드를 호출해 가상 메모리 하위 시스템을 초기화한다. */
 void
 vm_init (void) {
