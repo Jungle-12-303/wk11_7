@@ -387,6 +387,9 @@ __do_fork (void *aux) {
 
 	/* 자식 프로세스에서 fork()의 반환값은 0이다. */
 	if_.R.rax = 0;
+#ifdef VM
+	curr->user_rsp = if_.rsp;
+#endif
 
 	process_init ();
 	curr->self_status->fork_success = true;
@@ -1101,6 +1104,9 @@ setup_initial_stack (struct intr_frame *if_, char **argv, int argc) {
 	stack_p -= sizeof (uintptr_t);
 	memset (stack_p, 0, sizeof (uintptr_t));
 	if_->rsp = (uintptr_t) stack_p;
+#ifdef VM
+	thread_current ()->user_rsp = if_->rsp;
+#endif
 	return true;
 }
 
