@@ -55,32 +55,53 @@ page_less (const struct hash_elem *a, const struct hash_elem *b,
 	const struct page *pb = hash_entry (b, struct page, hash_elem);
 	return pa->va < pb->va;
 }
+/*
+enum vm_type type = 어떤 종류의 페이지를,
+void *upage = 어느 유저 가상주소에,
+bool writable = 어떤 권한으로,
+vm_initializer *init = 나중에 어떤 함수로 초기화할지, 실제 데이터를 채우는 함수
+void *aux = 그리고 그 초기화에 필요한 추가정보는 뭔지
+*/
 
-/* Create the pending page object with initializer. If you want to create a
- * page, do not create it directly and make it through this function or
- * `vm_alloc_page`. */
+/* SPT에 “아직 실제 frame은 없지만, 나중에 fault 나면 로드할 page 정보”를 등록하는 함수
+ * 초기화 함수(initializer)를 사용해서 아직 실제 프레임에 올라가지 않은 대기 상태의 페이지 객체를 만든다.
+ *
+ * 페이지를 만들고 싶다면 직접 생성하지 말고, 반드시 이 함수나 `vm_alloc_page`를 통해 만들어야 한다.
+ */
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
                                 vm_initializer *init, void *aux) {
-	ASSERT (VM_TYPE (type) != VM_UNINIT)
+	ASSERT (VM_TYPE (type) != VM_UNINIT);
 
+	/* upage를 “페이지 시작 주소”로 맞추기 */
+	upage = pg_round_down (upage);
 	struct supplemental_page_table *spt = &thread_current ()->spt;
-
-	/* Check wheter the upage is already occupied or not. */
-	if (spt_find_page (spt, upage) == NULL) {
-		/* TODO: Create the page, fetch the initialier according to the VM type,
-		 * TODO: and then create "uninit" page struct by calling uninit_new. You
-		 * TODO: should modify the field after calling the uninit_new. */
-		/* TODO VM-05: upage를 pg_round_down() 기준으로 맞추고 type에 따라
-		 * anon_initializer 또는 file_backed_initializer를 고른다. malloc()으로
-		 * struct page를 만들고 uninit_new(page, upage, init, type, aux,
-		 * initializer)를 호출한 뒤 writable 같은 접근권한 metadata를 page에
-		 * 저장한다. */
-
-		/* TODO: Insert the page into the spt. */
-		/* TODO VM-06: spt_insert_page() 성공 시 true를 반환한다. 실패하면
-		 * aux 소유권을 정해 page/aux를 누수 없이 해제한다. */
+	if (spt_find_page (spt, upage) != NULL) {
+		goto err;
 	}
+	/* type에 맞는 page_initializer 고르기 */
+	vm_initializer *initializer = NULL; /* 나중에 어떤 함수로 페이지를 초기화할지 저장하는 변수 */
+	switch (VM_TYPE (type)) {
+	case VM_ANON:
+		initializer = anon_initializer;
+		break;
+	case VM_FILE:
+		initializer = file_backed_initializer;
+		break;
+	default:
+		goto err;
+	}
+	struct page *page = malloc (sizeof *page); /* SPT에 오래 보관할 struct page를 heap에 만듦 */
+	if (page == NULL)
+		goto err;
+	uninit_new (page, upage, init, type, aux, initializer); /* 현재는 VM_UNINIT인데 lazy loading을 위해 페이지를 나중에 어떤 타입으로 어떻게 초기화할지 저장 */
+	page->writable = writable;
+	/* 지금 그냥 heap에 존재하고만 있는 상태니까 spt에 page 삽입해주기 */
+	if (!spt_insert_page (spt, page)) {
+		free (page); /* heap에 page 만들어둔 상태니까 실패하면 free해주기 */
+		goto err;
+	}
+	return true;
 err:
 	return false;
 }
