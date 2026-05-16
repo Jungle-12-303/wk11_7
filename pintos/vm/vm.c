@@ -38,6 +38,8 @@ page_get_type (struct page *page) {
 	switch (ty) {
 	case VM_UNINIT:
 		return VM_TYPE (page->uninit.type);
+	case VM_ANON:
+		return VM_TYPE (page->anon.type);
 	default:
 		return ty;
 	}

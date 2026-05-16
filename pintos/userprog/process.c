@@ -924,8 +924,7 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 static bool
 setup_process_address_space (struct thread *t) {
 	t->pml4 = pml4_create ();
-	if (t->pml4 == NULL)
-		return false;
+	RETURN_VALUE_IF (t->pml4 == NULL, false);
 
 	process_activate (t);
 	return true;
@@ -933,14 +932,11 @@ setup_process_address_space (struct thread *t) {
 
 static char *
 copy_command_line (const char *file_name) {
-	char *copy;
+	RETURN_VALUE_IF (file_name == NULL, NULL);
 
-	if (file_name == NULL)
-		return NULL;
+	char *copy = palloc_get_page (0);
 
-	copy = palloc_get_page (0);
-	if (copy == NULL)
-		return NULL;
+	RETURN_VALUE_IF (copy == NULL, NULL);
 
 	strlcpy (copy, file_name, PGSIZE);
 	return copy;
@@ -951,8 +947,7 @@ parse_command_line (char *command, char **argv, int *argc, size_t argv_cap) {
 	char *token;
 	char *save_point;
 
-	if (command == NULL || argv == NULL || argc == NULL)
-		return false;
+	RETURN_VALUE_IF (command == NULL || argv == NULL || argc == NULL, false);
 
 	*argc = 0;
 	for (token = strtok_r (command, " ", &save_point); token != NULL;
@@ -1507,8 +1502,7 @@ lazy_load_segment (struct page *page, void *aux_) {
 	uint8_t *kva = page->frame->kva;
 	bool success = false;
 
-	if (aux == NULL || aux->file == NULL)
-		goto done;
+	GOTO_IF (aux == NULL || aux->file == NULL, done);
 
 	lock_acquire (&filesys_lock);
 	if (file_read_at (aux->file, kva, aux->page_read_bytes, aux->ofs) == (off_t) aux->page_read_bytes) {
