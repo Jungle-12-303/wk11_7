@@ -2,6 +2,11 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+#include "lib/string.h"
+#include "threads/vaddr.h"
+
+#define SECTORS_PER_PAGE (PGSIZE / DISK_SECTOR_SIZE)
+#define SWAP_SLOT_NONE   ((size_t) -1)
 
 /* 아래 줄은 수정하지 말 것. */
 static struct disk *swap_disk;
@@ -20,8 +25,7 @@ static const struct page_operations anon_ops = {
 /* 익명 페이지용 데이터를 초기화한다. */
 void
 vm_anon_init (void) {
-	/* TODO: swap_disk를 설정한다. */
-	swap_disk = NULL;
+	swap_disk = disk_get (1, 1);
 }
 
 /* 익명 페이지 매핑을 초기화한다. */
@@ -40,7 +44,23 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 /* swap 디스크에서 내용을 읽어 페이지를 swap in한다. */
 static bool
 anon_swap_in (struct page *page, void *kva) {
-	struct anon_page *anon_page = &page->anon;
+	RETURN_VALUE_IF (page == NULL || kva == NULL, false);
+
+	if (page->anon.swapped) {
+		RETURN_VALUE_IF (swap_disk == NULL, false);
+
+		size_t i = 0;
+		while (i < SECTORS_PER_PAGE) {
+			disk_read (swap_disk, page->anon.swap_slot * SECTORS_PER_PAGE + i,
+			           (uint8_t *) kva + DISK_SECTOR_SIZE * i);
+			i++;
+		}
+		page->anon.swapped = false;
+		page->anon.swap_slot = SWAP_SLOT_NONE;
+	} else {
+		memset (kva, 0, PGSIZE);
+	}
+	return true;
 }
 
 /* 내용을 swap 디스크에 기록해 페이지를 swap out한다. */
