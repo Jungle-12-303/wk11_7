@@ -41,7 +41,6 @@ void seek (int fd, unsigned position);
 unsigned tell (int fd);
 int filesize (int fd);
 void check_address (const void *addr);
-static bool user_page_present (struct thread *curr, const void *addr);
 static bool user_page_accessible (struct thread *curr, const void *addr,
                                   bool write);
 static bool try_claim_user_addr (const void *addr, bool write,
@@ -105,7 +104,7 @@ syscall_init (void) {
  * 메인 시스템 콜 인터페이스.
  */
 void
-syscall_handler (struct intr_frame *f UNUSED) {
+syscall_handler (struct intr_frame *f) {
 #ifdef VM
 	thread_current ()->user_rsp = f->rsp;
 #endif
@@ -395,27 +394,13 @@ tell (int fd) {
 }
 /* 여기서부턴 헬퍼 함수 기술 */
 static bool
-user_page_present (struct thread *curr, const void *addr) {
-	uint64_t *pte;
-
-	if (curr == NULL || curr->pml4 == NULL)
-		return false;
-
-	pte = pml4e_walk (curr->pml4, (uint64_t) addr, 0);
-	if (pte == NULL || (*pte & PTE_P) == 0)
-		return false;
-
-	return true;
-}
-
-static bool
 user_page_accessible (struct thread *curr, const void *addr, bool write) {
 	uint64_t *pte;
 
-	if (!user_page_present (curr, addr))
-		return false;
-
+	RETURN_VALUE_IF (curr == NULL || curr->pml4 == NULL, false);
 	pte = pml4e_walk (curr->pml4, (uint64_t) addr, 0);
+	RETURN_VALUE_IF (pte == NULL || (*pte & PTE_P) == 0, false);
+
 	return !write || is_writable (pte);
 }
 
@@ -427,17 +412,10 @@ try_claim_user_addr (const void *addr, bool write, struct intr_frame *f) {
 	(void) f;
 #endif
 
-	if (addr == NULL || curr == NULL || curr->pml4 == NULL)
-		return false;
-
-	if (!is_user_vaddr (addr))
-		return false;
-
-	if (user_page_accessible (curr, addr, write))
-		return true;
-
-	if (write && user_page_present (curr, addr))
-		return false;
+	RETURN_VALUE_IF (addr == NULL || curr == NULL || curr->pml4 == NULL, false);
+	RETURN_VALUE_IF (!is_user_vaddr (addr), false);
+	RETURN_VALUE_IF (user_page_accessible (curr, addr, write), true);
+	RETURN_VALUE_IF (write && user_page_accessible (curr, addr, false), false);
 
 #ifdef VM
 	void *upage = pg_round_down (addr);
@@ -454,8 +432,7 @@ try_claim_user_addr (const void *addr, bool write, struct intr_frame *f) {
 		uintptr_t rsp = f->rsp;
 
 		if (uaddr < (uintptr_t) USER_STACK && rsp >= 8 && uaddr >= rsp - 8) {
-			if (!vm_try_handle_fault (f, (void *) addr, true, write, true))
-				return false;
+			RETURN_VALUE_IF (!vm_try_handle_fault (f, (void *) addr, true, write, true), false);
 			return user_page_accessible (curr, addr, write);
 		}
 	}
