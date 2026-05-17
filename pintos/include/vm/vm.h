@@ -1,9 +1,12 @@
 #ifndef VM_VM_H
 #define VM_VM_H
+#include <stddef.h>
 #include <stdbool.h>
+#include "filesys/off_t.h"
 #include "hash.h"
+#include "list.h"
 #include "threads/palloc.h"
-#include "hash.h"
+
 enum vm_type {
 	/* 아직 초기화되지 않은 페이지 */
 	VM_UNINIT = 0,
@@ -33,9 +36,17 @@ enum vm_type {
 #endif
 
 struct page_operations;
+struct file;
 struct thread;
 
 #define VM_TYPE(type) ((type) & 7)
+
+struct lazy_load_arg {
+	struct file *file;
+	off_t ofs;
+	size_t read_bytes;
+	size_t zero_bytes;
+};
 
 /* "page"의 표현.
  * 일종의 "부모 클래스" 역할을 하며,
@@ -49,11 +60,7 @@ struct page {
 	bool writable;       /* 유저 페이지 쓰기 가능 여부 */
 
 	/* 구현부 */
-	/* HOSEOK'S CODE */
-	struct hash_elem hash_elem;
-	bool writable;
-	/* HOSEOK'S CODE */
-	
+
 	/* 타입별 데이터는 union에 묶여 있다.
 	 * 각 함수는 현재 어떤 union 멤버를 써야 하는지 자동으로 판단한다. */
 	union {
@@ -76,7 +83,8 @@ struct spt_entry {
 struct frame {
 	void *kva;
 	struct page *page;
-	struct list_elem elem;   // frame table에 연결하기 위한 필드
+	struct thread *owner;
+	struct list_elem frame_elem;
 };
 
 /* 페이지 연산용 함수 테이블.
@@ -100,7 +108,7 @@ struct page_operations {
  * 이 구조체 설계는 특정 방식으로 강제하지 않는다.
  * 설계는 전적으로 구현자 선택이다. */
 struct supplemental_page_table {
-	struct hash hash_table;
+	struct hash pages;
 };
 
 #include "threads/thread.h"

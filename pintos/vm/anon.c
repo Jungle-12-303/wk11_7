@@ -39,14 +39,12 @@ vm_anon_init (void) {
 
 // 익명 페이지 초기화
 bool
-anon_initializer (struct page *page, enum vm_type type, void *kva) {
-	/* Set up the handler */
-	ASSERT(page != NULL);
-	
+anon_initializer (struct page *page, enum vm_type type, void *kva UNUSED) {
+	RETURN_VALUE_IF (page == NULL, false);
 	page->operations = &anon_ops;
-
-	struct anon_page *anon_page = &page->anon;
-
+	page->anon.type = type;
+	page->anon.swapped = false;
+	page->anon.swap_slot = SWAP_SLOT_NONE;
 	return true;
 }
 
@@ -109,21 +107,12 @@ anon_destroy (struct page *page) {
 	RETURN_IF (page == NULL);
 
 	if (page->anon.swapped) {
-		RETURN_IF (swap_bitmap == NULL);
+		RETURN_IF (swap_bitmap == NULL || page->anon.swap_slot == SWAP_SLOT_NONE);
 
 		lock_acquire (&swap_lock);
 		bitmap_set (swap_bitmap, page->anon.swap_slot, false);
 		page->anon.swapped = false;
 		page->anon.swap_slot = SWAP_SLOT_NONE;
 		lock_release (&swap_lock);
-	}
-
-	if (page->frame != NULL) {
-		if (page->frame->kva != NULL)
-			palloc_free_page (page->frame->kva);
-
-		page->frame->page = NULL;
-		free (page->frame);
-		page->frame = NULL;
 	}
 }

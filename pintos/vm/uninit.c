@@ -9,6 +9,8 @@
 
 #include "vm/vm.h"
 #include "vm/uninit.h"
+#include "filesys/file.h"
+#include "threads/malloc.h"
 
 static bool uninit_initialize (struct page *page, void *kva);
 static void uninit_destroy (struct page *page);
@@ -44,15 +46,16 @@ uninit_new (struct page *page, void *va, vm_initializer *init,
 /* 첫 폴트에서 페이지를 초기화한다. */
 static bool
 uninit_initialize (struct page *page, void *kva) {
+	RETURN_VALUE_IF (page == NULL, false);
 	struct uninit_page *uninit = &page->uninit;
-
-	/* page_initializer가 값을 덮어쓸 수 있으므로 먼저 꺼내 둔다. */
 	vm_initializer *init = uninit->init;
+	enum vm_type type = uninit->type;
 	void *aux = uninit->aux;
-	/* TODO: You may need to fix this function. */
-	/* vm_alloc_page_with_initializer 에서 등록해놓은 함수를 반환한다. */
-	return uninit->page_initializer (page, uninit->type, kva) &&
-		(init ? init (page, aux) : true);
+	bool (*initializer) (struct page *, enum vm_type, void *) =
+		uninit->page_initializer;
+
+	RETURN_VALUE_IF (initializer == NULL, false);
+	return initializer (page, type, kva) && (init == NULL || init (page, aux));
 }
 
 /* uninit_page가 가진 자원을 해제한다. 대부분의 페이지는 다른 페이지 객체로
@@ -60,7 +63,12 @@ uninit_initialize (struct page *page, void *kva) {
  * 남아 있을 수 있다. PAGE 자체는 호출자가 해제한다. */
 static void
 uninit_destroy (struct page *page) {
-	struct uninit_page *uninit UNUSED = &page->uninit;
-	/* TODO: 이 함수를 채운다.
-	 * TODO: 할 일이 없다면 그냥 반환한다. */
+	RETURN_IF (page == NULL);
+	struct lazy_load_arg *aux = page->uninit.aux;
+
+	RETURN_IF (aux == NULL);
+	if (aux->file != NULL)
+		file_close (aux->file);
+	free (aux);
+	page->uninit.aux = NULL;
 }
