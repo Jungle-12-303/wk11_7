@@ -260,8 +260,7 @@ bool
 vm_try_handle_fault (struct intr_frame *f, void *addr,
                      bool user, bool write, bool not_present) {
 	RETURN_VALUE_IF (vm_fault_addr_invalid (addr), false);
-	RETURN_VALUE_IF (!not_present, vm_handle_write_protect_fault (addr, write));
-	return vm_handle_not_present_fault (f, addr, user, write);
+	return !not_present ? vm_handle_write_protect_fault (addr, write) : vm_handle_not_present_fault (f, addr, user, write);
 }
 
 // fault 주소가 NULL이거나 커널 영역이면 복구할 수 없는 fault로 판단
@@ -312,11 +311,11 @@ vm_should_grow_stack (struct intr_frame *f, void *addr, bool user) {
 	uintptr_t fault_addr = (uintptr_t) addr;
 	uintptr_t rsp = user ? (uintptr_t) f->rsp : (uintptr_t) curr->user_rsp;
 
-	RETURN_VALUE_IF (rsp < 32, false);
+	RETURN_VALUE_IF (rsp < 8, false);
 
 	return fault_addr < (uintptr_t) USER_STACK &&
 	       fault_addr >= (uintptr_t) (USER_STACK - STACK_MAX) &&
-	       fault_addr >= rsp - 32;
+	       fault_addr >= rsp - 8;
 }
 
 // 스택 페이지 claim
@@ -329,9 +328,8 @@ vm_grow_stack_and_claim (void *addr) {
 // 권한 위반 fault 처리
 static bool
 vm_handle_write_protect_fault (void *addr, bool write) {
-	struct supplemental_page_table *spt = &thread_current ()->spt;
-	struct page *page = spt_find_page (spt, addr);
 	RETURN_VALUE_IF (!write, false);
+	struct page *page = spt_find_page (&thread_current ()->spt, addr);
 	RETURN_VALUE_IF (page == NULL, false);
 
 	return vm_handle_wp (page);
@@ -374,7 +372,11 @@ vm_do_claim_page (struct page *page) {
 		return false;
 	}
 
-	return swap_in (page, frame->kva);
+	if (!swap_in (page, frame->kva)) {
+		vm_destroy_page_frame (page);
+		return false;
+	}
+	return true;
 }
 
 /* 새 보조 페이지 테이블을 초기화한다. */

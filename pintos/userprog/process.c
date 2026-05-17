@@ -389,6 +389,7 @@ __do_fork (void *aux) {
 	if_.R.rax = 0;
 #ifdef VM
 	curr->user_rsp = if_.rsp;
+	curr->stack_bottom = parent->stack_bottom;
 #endif
 
 	process_init ();
@@ -1105,190 +1106,6 @@ setup_initial_stack (struct intr_frame *if_, char **argv, int argc) {
 	return true;
 }
 
-static bool
-setup_process_address_space (struct thread *t) {
-	t->pml4 = pml4_create ();
-	RETURN_VALUE_IF (t->pml4 == NULL, false);
-
-	process_activate (t);
-	return true;
-}
-
-static char *
-copy_command_line (const char *file_name) {
-	RETURN_VALUE_IF (file_name == NULL, NULL);
-
-	char *copy = palloc_get_page (0);
-
-	RETURN_VALUE_IF (copy == NULL, NULL);
-
-	strlcpy (copy, file_name, PGSIZE);
-	return copy;
-}
-
-static bool
-parse_command_line (char *command, char **argv, int *argc, size_t argv_cap) {
-	char *token;
-	char *save_point;
-
-	RETURN_VALUE_IF (command == NULL || argv == NULL || argc == NULL, false);
-
-	*argc = 0;
-	for (token = strtok_r (command, " ", &save_point); token != NULL;
-	     token = strtok_r (NULL, " ", &save_point)) {
-		if ((size_t) *argc >= argv_cap)
-			return false;
-		argv[(*argc)++] = token;
-	}
-	return *argc > 0;
-}
-
-static struct file *
-open_executable (const char *program_name) {
-	struct file *file;
-
-	lock_acquire (&filesys_lock);
-	file = filesys_open (program_name);
-	if (file != NULL)
-		file_deny_write (file);
-	lock_release (&filesys_lock);
-
-	return file;
-}
-
-static bool
-read_elf_header (struct file *file, struct ELF *ehdr) {
-	bool read_success;
-
-	lock_acquire (&filesys_lock);
-	read_success = file_read (file, ehdr, sizeof *ehdr) == sizeof *ehdr;
-	lock_release (&filesys_lock);
-
-	return read_success &&
-	       memcmp (ehdr->e_ident, "\177ELF\2\1\1", 7) == 0 &&
-	       ehdr->e_type == 2 &&
-	       ehdr->e_machine == 0x3E &&
-	       ehdr->e_version == 1 &&
-	       ehdr->e_phentsize == sizeof (struct Phdr) &&
-	       ehdr->e_phnum <= 1024;
-}
-
-static bool
-read_program_header (struct file *file, off_t file_ofs, struct Phdr *phdr) {
-	off_t length;
-	bool read_success;
-
-	lock_acquire (&filesys_lock);
-	length = file_length (file);
-	lock_release (&filesys_lock);
-	if (file_ofs < 0 || file_ofs > length)
-		return false;
-
-	lock_acquire (&filesys_lock);
-	file_seek (file, file_ofs);
-	read_success = file_read (file, phdr, sizeof *phdr) == sizeof *phdr;
-	lock_release (&filesys_lock);
-
-	return read_success;
-}
-
-static bool
-load_loadable_segment (struct file *file, const struct Phdr *phdr) {
-	bool writable;
-	uint64_t file_page;
-	uint64_t mem_page;
-	uint64_t page_offset;
-	uint32_t read_bytes;
-	uint32_t zero_bytes;
-
-	if (!validate_segment (phdr, file))
-		return false;
-
-	writable = (phdr->p_flags & PF_W) != 0;
-	file_page = phdr->p_offset & ~PGMASK;
-	mem_page = phdr->p_vaddr & ~PGMASK;
-	page_offset = phdr->p_vaddr & PGMASK;
-
-	if (phdr->p_filesz > 0) {
-		read_bytes = page_offset + phdr->p_filesz;
-		zero_bytes = ROUND_UP (page_offset + phdr->p_memsz, PGSIZE) -
-		             read_bytes;
-	} else {
-		read_bytes = 0;
-		zero_bytes = ROUND_UP (page_offset + phdr->p_memsz, PGSIZE);
-	}
-
-	return load_segment (file, file_page, (void *) mem_page, read_bytes,
-	                     zero_bytes, writable);
-}
-
-static bool
-load_program_headers (struct file *file, const struct ELF *ehdr) {
-	off_t file_ofs = ehdr->e_phoff;
-
-	for (int i = 0; i < ehdr->e_phnum; i++) {
-		struct Phdr phdr;
-
-		if (!read_program_header (file, file_ofs, &phdr))
-			return false;
-		file_ofs += sizeof phdr;
-
-		switch (phdr.p_type) {
-		case PT_NULL:
-		case PT_NOTE:
-		case PT_PHDR:
-		case PT_STACK:
-		default:
-			break;
-		case PT_DYNAMIC:
-		case PT_INTERP:
-		case PT_SHLIB:
-			return false;
-		case PT_LOAD:
-			if (!load_loadable_segment (file, &phdr))
-				return false;
-			break;
-		}
-	}
-	return true;
-}
-
-static bool
-setup_initial_stack (struct intr_frame *if_, char **argv, int argc) {
-	char *stack_p;
-
-	if (!setup_stack (if_))
-		return false;
-
-	stack_p = (char *) if_->rsp;
-	for (int argi = argc - 1; argi >= 0; argi--) {
-		int size = CSTR_SIZE (argv[argi]);
-		stack_p -= size;
-		memcpy (stack_p, argv[argi], size);
-		argv[argi] = stack_p;
-	}
-
-	stack_p = (char *) ((uintptr_t) stack_p & -8);
-	stack_p -= sizeof (uintptr_t);
-	memset (stack_p, 0, sizeof (uintptr_t));
-
-	for (int n = argc - 1; n >= 0; n--) {
-		stack_p -= sizeof (uintptr_t);
-		*(uintptr_t *) stack_p = (uintptr_t) argv[n];
-	}
-
-	if_->R.rsi = (uint64_t) stack_p;
-	if_->R.rdi = argc;
-
-	stack_p -= sizeof (uintptr_t);
-	memset (stack_p, 0, sizeof (uintptr_t));
-	if_->rsp = (uintptr_t) stack_p;
-#ifdef VM
-	thread_current ()->user_rsp = if_->rsp;
-#endif
-	return true;
-}
-
 /*
  * FILE_NAME의 ELF 실행 파일을 현재 스레드에 로드한다.
  * 실행 파일의 진입점을 *RIP에 저장하고,
@@ -1489,13 +1306,6 @@ install_page (void *upage, void *kpage, bool writable) {
  * 프로젝트 2만을 위한 함수를 구현하려면 위쪽 블록에 구현하라.
  */
 
-struct lazy_load_arg {
-	struct file *file;
-	off_t ofs;
-	size_t read_bytes;
-	size_t zero_bytes;
-};
-
 static bool
 lazy_load_segment (struct page *page, void *aux_) {
 	struct lazy_load_arg *aux = aux_;
@@ -1505,8 +1315,9 @@ lazy_load_segment (struct page *page, void *aux_) {
 	GOTO_IF (aux == NULL || aux->file == NULL, done);
 
 	lock_acquire (&filesys_lock);
-	if (file_read_at (aux->file, kva, aux->page_read_bytes, aux->ofs) == (off_t) aux->page_read_bytes) {
-		memset (kva + aux->page_read_bytes, 0, aux->page_zero_bytes);
+	if (file_read_at (aux->file, kva, aux->read_bytes, aux->ofs)
+	    == (off_t) aux->read_bytes) {
+		memset (kva + aux->read_bytes, 0, aux->zero_bytes);
 		success = true;
 	}
 	lock_release (&filesys_lock);
@@ -1552,24 +1363,23 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 		struct lazy_load_arg *aux = malloc (sizeof *aux);
 
-		struct lazy_load_arg * aux = malloc(sizeof *aux);
 		RETURN_VALUE_IF (aux == NULL, false);
 
-		aux->file = file_reopen(file);
+		aux->file = file_reopen (file);
 		if (aux->file == NULL) {
 			free (aux);
 			return false;
 		}
 		aux->ofs = ofs;
-		aux->page_read_bytes = page_read_bytes;
-		aux->page_zero_bytes = page_zero_bytes;
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
 		
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
 		                                     lazy_load_segment, aux)) {
 			file_close (aux->file);
-			free(aux);
-			return false;																		
-			}	
+			free (aux);
+			return false;
+		}
 		/*
 		 * 다음 페이지로 진행한다.
 		 */
