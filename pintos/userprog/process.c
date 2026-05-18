@@ -1375,7 +1375,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			free(aux);
 			return false;																		
 			}	
-		/*
+		/*ㅁ
 		 * 다음 페이지로 진행한다.
 		 */
 		read_bytes -= page_read_bytes;
