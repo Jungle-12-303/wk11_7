@@ -1264,21 +1264,28 @@ static bool install_page(void* upage, void* kpage, bool writable) {
  * project 2만을 위한 함수를 구현하려면 위쪽 블록에 구현하라.
  */
 
+struct lazy_load_arg {
+  struct file* file;
+  off_t ofs;
+  size_t page_read_bytes;
+  size_t page_zero_bytes;
+};
+
 static bool lazy_load_segment(struct page* page, void* aux) {
-  /*
-   * TODO: 파일에서 세그먼트를 로드하라.
-   */
-  /*
-   * TODO VM-07: aux에서 file, ofs, page_read_bytes, page_zero_bytes를
-   * 꺼내 page->frame->kva 또는 전달받은 kva에 file_read_at()으로 채우고,
-   * 남은 영역은 memset(0)한다.
-   */
-  /*
-   * TODO: 이 함수는 VA 주소에서 첫 번째 페이지 폴트가 발생했을 때 호출된다.
-   */
-  /*
-   * TODO: 이 함수를 호출할 때 VA를 사용할 수 있다.
-   */
+  struct lazy_load_arg* args = aux;
+  uint8_t* kva = page->frame->kva;
+  off_t bytes_read;
+
+  bytes_read = file_read_at(args->file, kva, args->page_read_bytes,
+                            args->ofs);
+  if (bytes_read != (off_t)args->page_read_bytes) {
+    free(args);
+    return false;
+  }
+
+  memset(kva + args->page_read_bytes, 0, args->page_zero_bytes);
+  free(args);
+  return true;
 }
 
 /*
@@ -1312,22 +1319,19 @@ static bool load_segment(struct file* file, off_t ofs, uint8_t* upage,
     size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
     size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-    /*
-     * TODO: lazy_load_segment에 정보를 전달할 aux를 설정하라.
-     */
-    /*
-     * TODO VM-06: page별 aux 구조체를 동적 할당해 file, ofs,
-     * page_read_bytes, page_zero_bytes를 저장한다. 등록 후에는 ofs,
-     * read_bytes, zero_bytes를 다음 page 기준으로 갱신한다.
-     */
-    void* aux = NULL;
-    /*
-     * TODO VM-06: executable lazy loading은 보통 VM_ANON + init callback으로
-     * 시작한다. mmap()은 file.c의 do_mmap()에서 VM_FILE로 등록한다.
-     */
+    struct lazy_load_arg* aux = malloc(sizeof *aux);
+    if (aux == NULL) return false;
+
+    aux->file = file;
+    aux->ofs = ofs;
+    aux->page_read_bytes = page_read_bytes;
+    aux->page_zero_bytes = page_zero_bytes;
+
     if (!vm_alloc_page_with_initializer(VM_ANON, upage, writable,
-                                        lazy_load_segment, aux))
+                                        lazy_load_segment, aux)) {
+      free(aux);
       return false;
+    }
 
     /*
      * 다음 페이지로 진행한다.
@@ -1335,6 +1339,7 @@ static bool load_segment(struct file* file, off_t ofs, uint8_t* upage,
     read_bytes -= page_read_bytes;
     zero_bytes -= page_zero_bytes;
     upage += PGSIZE;
+    ofs += page_read_bytes;
   }
   return true;
 }
@@ -1343,24 +1348,14 @@ static bool load_segment(struct file* file, off_t ofs, uint8_t* upage,
  * USER_STACK에 스택용 PAGE를 만든다. 성공하면 true를 반환한다.
  */
 static bool setup_stack(struct intr_frame* if_) {
-  bool success = false;
   void* stack_bottom = (void*)(((uint8_t*)USER_STACK) - PGSIZE);
 
-  /*
-   * TODO: stack_bottom에 스택을 매핑하고 페이지를 즉시 claim하라.
-   * TODO: 성공하면 그에 맞게 rsp를 설정하라.
-   * TODO: 해당 페이지를 스택 페이지로 표시해야 한다.
-   */
-  /*
-   * TODO VM-08: vm_alloc_page(VM_ANON, stack_bottom, true) 후
-   * vm_claim_page(stack_bottom)을 호출한다. 성공하면 if_->rsp = USER_STACK.
-   * stack page marker를 쓸 계획이면 VM_MARKER_0 같은 flag를 type에 섞거나
-   * struct page에 별도 필드를 둔다.
-   */
-  /*
-   * TODO: 여기에 코드를 작성하라.
-   */
+  if (!vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, true))
+    return false;
+  if (!vm_claim_page(stack_bottom))
+    return false;
 
-  return success;
+  if_->rsp = USER_STACK;
+  return true;
 }
 #endif /* VM */

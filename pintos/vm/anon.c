@@ -27,16 +27,17 @@ vm_anon_init (void) {
 	swap_disk = NULL;
 }
 
-/* Initialize the file mapping */
+/* VM_UNINIT page가 처음 fault 났을 때 anonymous page(VM_ANON page) 로 바뀌도록 초기화하는 함수 */
 bool
 anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
-	page->operations = &anon_ops;
+	page->operations = &anon_ops; /* 이 페이지는 이제 anonymous page 규칙으로 움직인다 */
 
 	struct anon_page *anon_page = &page->anon;
 	/* TODO VM-14: anonymous page metadata를 초기화한다. stack page는
 	 * zero-filled frame으로 시작하면 충분하고, swap 구현 시 slot 없음 상태를
 	 * 표시한다. */
+	return true;
 }
 
 /* Swap in the page by read contents from the swap disk. */

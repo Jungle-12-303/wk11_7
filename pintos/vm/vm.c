@@ -1,6 +1,8 @@
 /* vm.c: Generic interface for virtual memory objects. */
 
 #include "threads/malloc.h"
+#include "threads/mmu.h"
+#include "threads/vaddr.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
 
@@ -73,14 +75,17 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
                                 vm_initializer *init, void *aux) {
 	ASSERT (VM_TYPE (type) != VM_UNINIT);
 
+	struct supplemental_page_table *spt = &thread_current ()->spt;
+	if (upage == NULL)
+		goto err;
+
 	/* upage를 “페이지 시작 주소”로 맞추기 */
 	upage = pg_round_down (upage);
-	struct supplemental_page_table *spt = &thread_current ()->spt;
 	if (spt_find_page (spt, upage) != NULL) {
 		goto err;
 	}
 	/* type에 맞는 page_initializer 고르기 */
-	vm_initializer *initializer = NULL; /* 나중에 어떤 함수로 페이지를 초기화할지 저장하는 변수 */
+	bool (*initializer) (struct page *, enum vm_type, void *) = NULL; /* 나중에 어떤 함수로 페이지를 초기화할지 저장하는 변수 */
 	switch (VM_TYPE (type)) {
 	case VM_ANON:
 		initializer = anon_initializer;
@@ -115,7 +120,7 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 	struct page real_page;
 	struct hash_elem *e;
 	real_page.va = pg_round_down (va);
-	e = hash_find (&spt->hash_page, &real_page.hash_elem); /* e와 같은 요소 찾아서 반환 */
+	e = hash_find (&spt->hash_pages, &real_page.hash_elem); /* e와 같은 요소 찾아서 반환 */
 	if (e == NULL)
 		return NULL;
 	return hash_entry (e, struct page, hash_elem);
@@ -125,10 +130,10 @@ spt_find_page (struct supplemental_page_table *spt, void *va) {
 같은 va가 있으면 false
 같은 va가 없으면 true */
 bool
-spt_insert_page (struct supplemental_page_table *spt UNUSED, struct page *page UNUSED) {
-	int succ = false;
+spt_insert_page (struct supplemental_page_table *spt, struct page *page) {
+	bool succ = false;
 	struct hash_elem *old;
-	old = hash_insert (&spt->hash_page, &page->hash_elem);
+	old = hash_insert (&spt->hash_pages, &page->hash_elem);
 	if (old == NULL)
 		succ = true;
 	return succ;
@@ -139,9 +144,8 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED, struct page *page U
  * 재사용하게 만든다. */
 /* 이제 이 페이지 안 쓸거니까 삭제한다 */
 void
-spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
+spt_remove_page (struct supplemental_page_table *spt UNUSED, struct page *page) {
 	vm_dealloc_page (page);
-	return true;
 }
 
 /* Get the struct frame, that will be evicted. */
@@ -177,20 +181,17 @@ palloc()으로 페이지를 할당받아 frame을 얻는다.
 static struct frame *
 vm_get_frame (void) {
 	struct frame *frame;
-	/* TODO: Fill this function. */
-	/* TODO VM-10: palloc_get_page(PAL_USER)로 kva를 얻고 struct frame을
-	 * 할당해 frame->kva=kva, frame->page=NULL로 초기화한다. palloc 실패 시
-	 * vm_evict_frame()으로 재사용 frame을 얻는다
-	 * palloc_get_page를 호출하여 사용자 풀에서 새로운 물리 페이지를 가져옵니다.
-	 */
 	void *kva;
-	kva = palloc_get_page (PAL_USER);
-	if (kva == NULL)
-		PANIC ("todo");
 
 	frame = malloc (sizeof *frame);
 	if (frame == NULL)
-		PANIC ("todo");
+		return NULL;
+
+	kva = palloc_get_page (PAL_USER);
+	if (kva == NULL) {
+		free (frame);
+		return NULL;
+	}
 
 	frame->kva = kva; /* 실제 4KB 물리 메모리에 접근할 커널 가상주소 */
 	frame->page = NULL;
@@ -214,6 +215,7 @@ vm_handle_wp (struct page *page UNUSED) {
 	/* TODO VM-22: copy-on-write를 구현하지 않는 최소 cycle에서는 false를
 	 * 반환해 write-protected fault를 죽인다. COW를 할 때는 새 frame 복사와
 	 * writable PTE 재설치를 여기서 처리한다. */
+	return false;
 }
 
 /* Return true on success */
@@ -282,6 +284,8 @@ SPT에 있던 struct page를 실제 물리 frame에 올리고, PML4에 매핑한
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
+	if (frame == NULL)
+		return false;
 
 	/* 양방향 연결 */
 	frame->page = page;  /* 물리 frame이 어떤 가상 page를 담고 있는지 기록 */
@@ -289,6 +293,10 @@ vm_do_claim_page (struct page *page) {
 
 	/* 현재 실행 중인 thread의 PML4에 page->va  →  frame->kva 매핑을 추가 */
 	if (!pml4_set_page (thread_current ()->pml4, page->va, frame->kva, page->writable)) {
+		frame->page = NULL;
+		page->frame = NULL;
+		palloc_free_page (frame->kva);
+		free (frame);
 		return false;
 	}
 	return swap_in (page, frame->kva); /* swap_in()으로 실제 데이터를 frame에 채우기 */
@@ -297,7 +305,7 @@ vm_do_claim_page (struct page *page) {
 /* SPT의 hash_table을 page_hash/page_less 규칙으로 초기화한다 */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	hash_init (&spt->hash_page, page_hash, page_less, NULL);
+	hash_init (&spt->hash_pages, page_hash, page_less, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
@@ -307,6 +315,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 	/* TODO VM-18: fork 최소 통과를 위해 src의 각 page를 dst에 복제한다.
 	 * UNINIT은 aux를 deep copy하거나 file reference를 다시 열고, resident
 	 * page는 child page를 만들고 claim한 뒤 frame bytes를 복사한다. */
+	return false;
 }
 
 /* Free the resource hold by the supplemental page table */

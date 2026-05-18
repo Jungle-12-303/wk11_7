@@ -101,7 +101,7 @@ struct page_operations {
 
 /* spt 안에 va를 key로 해서 struct page 찾는 자료구조가 필요함. hash page 하나 들어감 */
 struct supplemental_page_table {
-	struct hash hash_page;
+	struct hash hash_pages;
 };
 
 uint64_t page_hash (const struct hash_elem *e, void *aux);
@@ -121,11 +121,13 @@ void vm_init (void);
 bool vm_try_handle_fault (struct intr_frame *f, void *addr, bool user,
                           bool write, bool not_present);
 
+/* 유저 가상주소에 이런 타입/권한의 페이지가 존재할 예정이라고 SPT에 예약 등록 */
 #define vm_alloc_page(type, upage, writable) \
 	vm_alloc_page_with_initializer ((type), (upage), (writable), NULL, NULL)
 bool vm_alloc_page_with_initializer (enum vm_type type, void *upage,
                                      bool writable, vm_initializer *init, void *aux);
 void vm_dealloc_page (struct page *page);
+/* 예약된 페이지에 실제 프레임을 붙이고 페이지 테이블에 매핑 */
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
 
