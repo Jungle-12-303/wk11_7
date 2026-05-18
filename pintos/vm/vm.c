@@ -54,7 +54,7 @@ static bool vm_handle_unwritable_spt_page (struct page *page UNUSED);
 static bool vm_should_grow_stack (struct intr_frame *f, void *addr, bool user);
 static bool vm_grow_stack_and_claim (void *addr);
 static bool vm_handle_write_protect_fault (void *addr, bool write);
-spt_entry_destory (struct hash_elem *e, void *aux UNUSED);
+static void spt_entry_destroy (struct hash_elem *e, void *aux UNUSED);
 
 static uint64_t
 page_hash (const struct hash_elem *e, void *aux UNUSED) {
@@ -73,7 +73,7 @@ page_less (const struct hash_elem *a, const struct hash_elem *b,
 }
 
 static void
-spt_entry_destory (struct hash_elem *e, void *aux UNUSED) {
+spt_entry_destroy (struct hash_elem *e, void *aux UNUSED) {
 	struct page* page = hash_entry(e, struct page, hash_elem);
 	vm_dealloc_page(page);
 }
@@ -379,16 +379,20 @@ vm_do_claim_page (struct page *page) {
 
 	frame->page = page;
 	page->frame = frame;
+	if (!pml4_set_page (curr->pml4, page->va, frame->kva, page->writable))
+		goto err;
 
-	if (!pml4_set_page (curr->pml4, page->va, frame->kva, page->writable)) {
-		frame->page = NULL;
-		page->frame = NULL;
-		palloc_free_page (frame->kva);
-		free (frame);
-		return false;
-	}
+	if (swap_in (page, frame->kva))
+		return true;
 
-	return swap_in (page, frame->kva);
+err:
+	pml4_clear_page(curr->pml4, page->va);
+	list_remove(&frame->elem);
+	frame->page = NULL;
+	page->frame = NULL;
+	palloc_free_page (frame->kva);	
+	free (frame);
+	return false;	
 }
 
 /* Initialize new supplemental page table */
@@ -454,5 +458,5 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	hash_destroy(&spt->hash_table, spt_entry_destory);
+	hash_destroy(&spt->hash_table, spt_entry_destroy);
 }

@@ -13,6 +13,7 @@
 #include "userprog/process.h"
 #include "filesys/file.h"
 #include "threads/malloc.h"
+#include "userprog/syscall.h"
 
 static bool uninit_initialize (struct page *page, void *kva);
 static void uninit_destroy (struct page *page);
@@ -67,18 +68,17 @@ static void
 uninit_destroy (struct page *page) {
 	struct uninit_page *uninit = &page->uninit;
 	struct lazy_load_arg* lazy_aux = uninit->aux;
-
 	RETURN_IF(lazy_aux == NULL);
 
 	if(lazy_aux->file != NULL) {
-		lock_acquire(lazy_aux->file);
+		lock_acquire(&filesys_lock);
 		file_close(lazy_aux->file);
-		lock_release(lazy_aux->file);
+		lock_release(&filesys_lock);
 	}
 
 	free(lazy_aux);
 	
-	// uninit->aux = NULL;
+	uninit->aux = NULL;
 
 	return;
 }
