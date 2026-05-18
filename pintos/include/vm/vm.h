@@ -46,11 +46,8 @@ struct page {
 	void *va;              /* 유저 공간 기준 주소 */
 	struct frame *frame;   /* frame에서 page로 되돌아오는 참조 */
 
-	/* 구현부 */
-	/* HOSEOK'S CODE */
 	struct hash_elem hash_elem;
 	bool writable;
-	/* HOSEOK'S CODE */
 	
 	/* 타입별 데이터는 union에 묶여 있다.
 	 * 각 함수는 현재 어떤 union 멤버를 써야 하는지 자동으로 판단한다. */
@@ -69,6 +66,7 @@ struct frame {
 	void *kva;
 	struct page *page;
 	struct list_elem elem;   // frame table에 연결하기 위한 필드
+	struct thread* owner_thread;
 };
 
 /* 페이지 연산용 함수 테이블.

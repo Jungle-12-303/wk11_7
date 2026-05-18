@@ -11,6 +11,8 @@
 #define STACK_MAX ((uintptr_t) 1 << 20) /* 유저 스택 최대 크기: 1MB */
 
 static struct list frame_table;
+static struct lock frame_lock;
+static struct list_elem* clock_ptr;
 
 /* 각 하위 시스템의 초기화 코드를 호출해 가상 메모리 하위 시스템을 초기화한다. */
 void
@@ -24,6 +26,8 @@ vm_init (void) {
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
 	list_init(&frame_table);
+	lock_init(&frame_lock);
+	clock_ptr = NULL;
 }
 
 /* 페이지 타입을 얻는다. 아직 초기화되지 않은 페이지가 실제로 어떤 타입으로
@@ -155,8 +159,6 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 
 	hash_delete (&spt->hash_table, &page->hash_elem);
 	vm_dealloc_page (page);
-
-	// return true;
 }
 
 /* 교체 대상이 될 struct frame을 고른다. */
@@ -164,6 +166,28 @@ static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
 	/* TODO: 교체 정책은 직접 정한다. */
+	//clock algorithm
+	if (clock_ptr == NULL)
+		clock_ptr = list_begin(&frame_table);
+
+	while (true){
+		if (clock_ptr == list_end(&frame_table)) {
+            clock_ptr = list_begin(&frame_table);
+            continue;
+        }
+
+        struct frame *clock_frame = list_entry(clock_ptr, struct frame, elem);
+        bool accessed = pml4_is_accessed(clock_frame->owner_thread->pml4, clock_frame->page->va);
+
+        if (!accessed) {
+            clock_ptr = list_next(clock_ptr);
+            return clock_frame;
+        }
+
+        pml4_set_accessed(clock_frame->owner_thread->pml4, clock_frame->page->va, false);
+        
+        clock_ptr = list_next(clock_ptr);
+    }
 
 	return victim;
 }
@@ -172,10 +196,13 @@ vm_get_victim (void) {
  * 오류가 있으면 NULL을 반환한다. */
 static struct frame *
 vm_evict_frame (void) {
-	struct frame *victim UNUSED = vm_get_victim ();
+	struct frame *victim = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
-
-	return NULL;
+	if (!swap_out(victim->page))
+		return NULL;
+	victim->owner_thread = NULL;
+	victim->page = NULL;
+	return victim;
 }
 
 /* palloc()을 호출해서 프레임을 얻는다.
@@ -191,33 +218,25 @@ frame에 올리기 위해 할당받는곳
  */
 static struct frame *
 vm_get_frame (void) {
-	struct frame *frame = malloc(sizeof* frame);
-	RETURN_VALUE_IF (frame == NULL, NULL);
+	void* kva = palloc_get_page (PAL_USER);
 
-	frame->kva = palloc_get_page (PAL_USER);
-	if(frame->kva != NULL) {
-		frame->page = NULL;
-	}
-	else {
-		/*eviction 하는 코드 아직없움
-		vm_evict_frame ();
-		*/
-		free(frame);
+	if(kva == NULL) 
+		return vm_evict_frame ();
+
+	struct frame *frame = malloc(sizeof* frame);
+	if (frame == NULL){
+		palloc_free_page(kva);
 		return NULL;
 	}
-	/*
-	list_init(&frame_table) vm 초기화 시점에 있어야함
+	
+	frame->kva = kva;
+	frame->page = NULL;
+	frame->owner_thread = thread_current();
 
-	lock_acquire(&frame_table_lock)
-	list_push_back(...)
-	lock_release(&frame_table_lock)
-	 */
+	lock_acquire(&frame_lock);
 	list_push_back(&frame_table, &frame->elem);
+	lock_release(&frame_lock);
 
-	// ASSERT (frame != NULL);
-	// ASSERT (frame->page == NULL);
-
-	// 만든 frame free는 언제하지 
 	return frame;
 }
 
@@ -363,6 +382,7 @@ vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
 	RETURN_VALUE_IF(frame == NULL , false);
 
+	frame->owner_thread = curr;
 	frame->page = page;
 	page->frame = frame;
 
