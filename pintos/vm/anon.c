@@ -20,8 +20,10 @@ static const struct page_operations anon_ops = {
 };
 
 #define SWAP_SLOT 8
+#define SWAP_SLOT_NONE   ((size_t) -1)
 
 static struct bitmap* disk_bitmap;
+static struct lock swap_lock;
 
 /* Initialize the data for anonymous pages */
 void
@@ -36,6 +38,7 @@ vm_anon_init (void) {
 	disk_bitmap = bitmap_create(sectors / SWAP_SLOT);
 	if (!disk_bitmap)
 		PANIC("NO DISK BITMAP");
+	lock_init(&swap_lock);
 }
 
 /* Initialize the file mapping */
@@ -59,7 +62,7 @@ anon_swap_in (struct page *page, void *kva) {
 	bitmap_flip(disk_bitmap, anon_page->swap_idx);
 
 	for (int i = 0; i < SWAP_SLOT; i++){
-		disk_read(swap_disk, anon_page->swap_idx * 8 + i, (int)page->frame->kva + i * 512);
+		disk_read(swap_disk, anon_page->swap_idx * 8 + i, (uint8_t *)kva + i * 512);
 	}
 
 	pml4_set_page(thread_current()->pml4, page->va, kva, page->writable);
@@ -74,14 +77,35 @@ anon_swap_out (struct page *page) {
 	if (anon_page->swap_idx == BITMAP_ERROR)
 		return false;
 	for (int i = 0; i < SWAP_SLOT; i++){
-		disk_write(swap_disk, anon_page->swap_idx * 8 + i, (int)page->frame->kva + i * 512);
+		disk_write(swap_disk, anon_page->swap_idx * 8 + i, (uint8_t *)page->frame->kva + i * 512);
 	}
-	pml4_clear_page(page->frame->owner_thread, page->va);
+	page->anon.swapped = true;
+	pml4_clear_page(page->frame->owner_thread->pml4, page->va);
 	return true;
 }
 
 /* Destroy the anonymous page. PAGE will be freed by the caller. */
+// destroy
 static void
 anon_destroy (struct page *page) {
-	struct anon_page *anon_page = &page->anon;
+	RETURN_IF (page == NULL);
+
+	if (page->anon.swapped) {
+		RETURN_IF (disk_bitmap == NULL);
+
+		lock_acquire (&swap_lock);
+		bitmap_set (disk_bitmap, page->anon.swap_idx, false);
+		page->anon.swapped = false;
+		page->anon.swap_idx = SWAP_SLOT_NONE;
+		lock_release (&swap_lock);
+	}
+
+	if (page->frame != NULL) {
+		if (page->frame->kva != NULL)
+			palloc_free_page (page->frame->kva);
+
+		page->frame->page = NULL;
+		free (page->frame);
+		page->frame = NULL;
+	}
 }
