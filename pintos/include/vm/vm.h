@@ -85,6 +85,7 @@ struct frame {
 	struct page *page;
 	struct thread *owner;
 	struct list_elem frame_elem;
+	size_t ref_count;
 };
 
 /* 페이지 연산용 함수 테이블.

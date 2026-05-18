@@ -63,6 +63,11 @@ static bool vm_handle_unwritable_spt_page (struct page *page);
 static bool vm_should_grow_stack (struct intr_frame *f, void *addr, bool user);
 static bool vm_grow_stack_and_claim (void *addr);
 static bool vm_handle_write_protect_fault (void *addr, bool write);
+static bool vm_handle_wp (struct page *page);
+static bool vm_handle_cow (struct page *page) UNUSED;
+static bool vm_copy_cow_page (struct page *page, struct frame *old_frame) UNUSED;
+static bool vm_remap_page (struct page *page, struct frame *frame,
+                           bool writable) UNUSED;
 static bool spt_copy_page (struct supplemental_page_table *dst,
                            struct page *page);
 static bool spt_copy_uninit_page (struct page *page);
@@ -110,9 +115,8 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	enum vm_type page_type = VM_TYPE (type);
 	struct spt_entry *entry;
 	bool (*page_initializer) (struct page *, enum vm_type, void *) =
-		page_type == VM_ANON ? anon_initializer :
-		page_type == VM_FILE ? file_backed_initializer :
-		NULL;
+	        page_type == VM_ANON ? anon_initializer : page_type == VM_FILE ? file_backed_initializer
+	                                                                       : NULL;
 
 	RETURN_VALUE_IF (upage == NULL || spt_find_page (spt, upage) != NULL, false);
 	RETURN_VALUE_IF (page_initializer == NULL, false);
@@ -219,6 +223,7 @@ vm_get_frame (void) {
 	}
 	frame->page = NULL;
 	frame->owner = NULL;
+	frame->ref_count = 1;
 	return frame;
 }
 
@@ -247,12 +252,58 @@ static bool
 vm_handle_wp (struct page *page) {
 	struct thread *curr = thread_current ();
 
+	// 논리적으로 쓰기 가능한 페이지가 실제 PTE에서는 read-only인 경우,
+	// COW 페이지일 수 있으므로 전용 처리로 넘김
 	RETURN_VALUE_IF (page == NULL || curr == NULL || curr->pml4 == NULL, false);
 	RETURN_VALUE_IF (!page->writable, false);
 	RETURN_VALUE_IF (page->frame == NULL || page->frame->kva == NULL, false);
 
+	return vm_handle_cow (page);
+}
+
+static bool
+vm_handle_cow (struct page *page UNUSED) {
+	RETURN_VALUE_IF (page == NULL, false);
+
+	struct frame *old_frame = page->frame;
+
+	RETURN_VALUE_IF (old_frame == NULL || old_frame->kva == NULL, false);
+	RETURN_VALUE_IF (old_frame->ref_count > 1, vm_copy_cow_page (page, old_frame));
+
+	return vm_remap_page (page, old_frame, true);
+}
+
+static bool
+vm_copy_cow_page (struct page *page UNUSED, struct frame *old_frame UNUSED) {
+	RETURN_VALUE_IF (page == NULL || old_frame == NULL, false);
+	RETURN_VALUE_IF (old_frame->kva == NULL, false);
+
+	struct frame *new_frame = vm_get_frame ();
+	RETURN_VALUE_IF (new_frame == NULL, false);
+
+	memcpy (new_frame->kva, old_frame->kva, PGSIZE);
+
+	old_frame->ref_count--;
+
+	return vm_remap_page (page, new_frame, true);
+}
+
+static bool
+vm_remap_page (struct page *page UNUSED, struct frame *frame UNUSED,
+               bool writable UNUSED) {
+	struct thread *curr = thread_current ();
+
+	RETURN_VALUE_IF (page == NULL || frame == NULL, false);
+	RETURN_VALUE_IF (curr == NULL || curr->pml4 == NULL, false);
+	RETURN_VALUE_IF (page->va == NULL || frame->kva == NULL, false);
+
 	pml4_clear_page (curr->pml4, page->va);
-	return pml4_set_page (curr->pml4, page->va, page->frame->kva, true);
+	RETURN_VALUE_IF (!pml4_set_page (curr->pml4, page->va, frame->kva, writable), false);
+
+	frame->page = page;
+	frame->owner = curr;
+	page->frame = frame;
+	return true;
 }
 
 // OS가 복구할 수 있는 page fault를 처리
