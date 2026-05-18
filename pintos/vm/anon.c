@@ -64,8 +64,10 @@ anon_swap_in (struct page *page, void *kva) {
 	for (int i = 0; i < SWAP_SLOT; i++){
 		disk_read(swap_disk, anon_page->swap_idx * 8 + i, (uint8_t *)kva + i * 512);
 	}
-
+	anon_page->swapped = false;
+	anon_page->swap_idx = BITMAP_ERROR;
 	pml4_set_page(thread_current()->pml4, page->va, kva, page->writable);
+	
 	return true;
 }
 

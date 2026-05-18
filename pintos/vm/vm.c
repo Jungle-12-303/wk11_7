@@ -254,7 +254,7 @@ vm_stack_growth (void *addr UNUSED) {
 		stack_bottom -= PGSIZE;
 
 		RETURN_IF (!vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true));
-		RETURN_IF (!vm_claim_page (stack_bottom));
+		// RETURN_IF (!vm_claim_page (stack_bottom)); claim 2번 들어감
 
 		curr->stack_bottom = stack_bottom;
 	}
