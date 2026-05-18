@@ -2,6 +2,8 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+#include "mmu.h"
+#include "threads/malloc.h"
 
 /* DO NOT MODIFY BELOW LINE */
 static struct disk *swap_disk;
@@ -52,5 +54,21 @@ anon_swap_out (struct page *page) {
 /* Destroy the anonymous page. PAGE will be freed by the caller. */
 static void
 anon_destroy (struct page *page) {
-	struct anon_page *anon_page = &page->anon;
+	struct thread* curr = thread_current();
+	RETURN_IF(page->frame == NULL || curr == NULL || curr->pml4 == NULL);
+
+	struct anon_page* anon_page UNUSED = &page->anon;
+	struct frame* anon_frame = page->frame;
+
+	pml4_clear_page(curr->pml4, page->va);
+
+	list_remove(&anon_frame->elem);
+
+	page->frame = NULL;
+	anon_frame->page = NULL;
+	
+	palloc_free_page(anon_frame->kva);
+
+	free(anon_frame);
+
 }

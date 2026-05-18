@@ -54,6 +54,7 @@ static bool vm_handle_unwritable_spt_page (struct page *page UNUSED);
 static bool vm_should_grow_stack (struct intr_frame *f, void *addr, bool user);
 static bool vm_grow_stack_and_claim (void *addr);
 static bool vm_handle_write_protect_fault (void *addr, bool write);
+spt_entry_destory (struct hash_elem *e, void *aux UNUSED);
 
 static uint64_t
 page_hash (const struct hash_elem *e, void *aux UNUSED) {
@@ -71,6 +72,11 @@ page_less (const struct hash_elem *a, const struct hash_elem *b,
 	return page_one->va < page_two->va;
 }
 
+static void
+spt_entry_destory (struct hash_elem *e, void *aux UNUSED) {
+	struct page* page = hash_entry(e, struct page, hash_elem);
+	vm_dealloc_page(page);
+}
 
 /* 초기화 함수를 가진 대기 상태 페이지 객체를 만든다. 페이지가 필요하면 직접
  * 만들지 말고 이 함수나 vm_alloc_page()를 통해 만들어야 한다. */
@@ -222,11 +228,11 @@ vm_get_frame (void) {
 }
 
 /* 스택을 확장한다. */
-static void
+static bool
 vm_stack_growth (void *addr UNUSED) {
 	struct thread *curr = thread_current ();
 
-	RETURN_IF (addr == NULL || curr == NULL || curr->stack_bottom == NULL);
+	RETURN_VALUE_IF ((addr == NULL || curr == NULL || curr->stack_bottom == NULL), false);
 
 	void *stack_bottom = curr->stack_bottom;
 	void *page = pg_round_down (addr);
@@ -236,11 +242,13 @@ vm_stack_growth (void *addr UNUSED) {
 		stack_bottom -= PGSIZE;
 
 		/* 페이지 메타데이터를 SPT에 등록, 실제 프레임을 붙이고 page table에 매핑을 내려가면서 계속 진행 */
-		RETURN_IF (!vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true));
-		RETURN_IF (!vm_claim_page (stack_bottom));
+		RETURN_VALUE_IF (!vm_alloc_page (VM_ANON | VM_MARKER_0, stack_bottom, true), false);
+		RETURN_VALUE_IF (!vm_claim_page (stack_bottom), false);
 
 		curr->stack_bottom = stack_bottom;
 	}
+
+	return true;
 }
 
 /* 쓰기 보호 페이지에서 발생한 폴트를 처리한다. */
@@ -323,7 +331,7 @@ static bool
 vm_grow_stack_and_claim (void *addr) {
 	/* TODO: vm_stack_growth()에서 pg_round_down(addr)에 VM_ANON 스택
 	 * 페이지를 SPT에 추가하게 만든 뒤 claim한다. */
-	vm_stack_growth (addr);
+	return vm_stack_growth (addr);
 }
 
 /* 이미 존재하는 페이지의 권한 위반 fault를 처리한다. */
@@ -446,4 +454,5 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	hash_destroy(&spt->hash_table, spt_entry_destory);
 }
