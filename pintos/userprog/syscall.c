@@ -41,6 +41,7 @@ void seek (int fd, unsigned position);
 unsigned tell (int fd);
 int filesize (int fd);
 void check_address (const void *addr);
+size_t* mmap(void *addr, size_t length, int writable, int fd, off_t offset);
 static bool user_page_present (struct thread *curr, const void *addr);
 static bool user_page_accessible (struct thread *curr, const void *addr,
                                   bool write);
@@ -573,11 +574,11 @@ copy_in_string (const char *str, struct intr_frame *f) {
 	return kernel;
 }
 
-static size_t*
+size_t*
 mmap(void *addr, size_t length, int writable, int fd, off_t offset){
 	RETURN_VALUE_IF(addr == NULL || length == 0, NULL);
 	struct file* file = thread_current()->fd_table[fd];
 	RETURN_VALUE_IF(file == NULL, NULL);
-	
+
 	do_mmap(addr, length, writable, file, offset);
 }

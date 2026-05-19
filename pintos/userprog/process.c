@@ -1374,7 +1374,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			file_close (aux->file);
 			free(aux);
 			return false;																		
-			}	
+		}	
 		/*
 		 * 다음 페이지로 진행한다.
 		 */

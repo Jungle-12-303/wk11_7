@@ -4,10 +4,12 @@
 #include "devices/disk.h"
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
+#include "string.h"
 
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
 static void file_backed_destroy (struct page *page);
+static bool lazy_load_file (struct page *page, void *aux_);
 static struct lock file_lock;
 
 /* DO NOT MODIFY this struct */
