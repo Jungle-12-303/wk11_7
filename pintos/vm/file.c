@@ -21,11 +21,21 @@ vm_file_init (void) {
 
 /* 파일 기반 페이지를 초기화한다. */
 bool
-file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
-	/* 처리 함수를 설정한다. */
+file_backed_initializer (struct page *page, enum vm_type type, void *kva UNUSED) {
+	struct file_page *file_page;
+
+	RETURN_VALUE_IF (page == NULL, false);
 	page->operations = &file_ops;
 
-	struct file_page *file_page = &page->file;
+	file_page = &page->file;
+	file_page->type = type;
+	file_page->file = NULL;
+	file_page->ofs = 0;
+	file_page->read_bytes = 0;
+	file_page->zero_bytes = 0;
+	file_page->map_start = NULL;
+
+	return true;
 }
 
 /* 파일에서 내용을 읽어 페이지를 swap in한다. */
