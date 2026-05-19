@@ -114,12 +114,20 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	enum vm_type page_type = VM_TYPE (type);
 	struct spt_entry *entry;
-	bool (*page_initializer) (struct page *, enum vm_type, void *) =
-	        page_type == VM_ANON ? anon_initializer : page_type == VM_FILE ? file_backed_initializer
-	                                                                       : NULL;
+	bool (*page_initializer) (struct page *, enum vm_type, void *) = NULL;
+
+	switch (page_type) {
+	case VM_ANON:
+		page_initializer = anon_initializer;
+		break;
+	case VM_FILE:
+		page_initializer = file_backed_initializer;
+		break;
+	default:
+		return false;
+	}
 
 	RETURN_VALUE_IF (upage == NULL || spt_find_page (spt, upage) != NULL, false);
-	RETURN_VALUE_IF (page_initializer == NULL, false);
 
 	entry = malloc (sizeof *entry);
 	RETURN_VALUE_IF (entry == NULL, false);
@@ -168,16 +176,31 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 	vm_dealloc_page (page);
 }
 
-/* 교체 대상이 될 struct frame을 고른다. */
+// 교체 대상이 될 frame 뽑기
 static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
+	size_t frame_count;
+
 	lock_acquire (&frame_table_lock);
 
-	if (!list_empty (&frame_table)) {
+	frame_count = list_size (&frame_table) * 2;
+	while (frame_count-- > 0) {
 		struct list_elem *e = list_pop_front (&frame_table);
 		list_push_back (&frame_table, e);
-		victim = list_entry (e, struct frame, frame_elem);
+
+		struct frame *frame = list_entry (e, struct frame, frame_elem);
+		if (frame->owner == NULL || frame->owner->pml4 == NULL ||
+		    frame->page == NULL)
+			continue;
+
+		if (pml4_is_accessed (frame->owner->pml4, frame->page->va)) {
+			pml4_set_accessed (frame->owner->pml4, frame->page->va, false);
+			continue;
+		}
+
+		victim = frame;
+		break;
 	}
 	lock_release (&frame_table_lock);
 
@@ -437,7 +460,7 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 	hash_init (&spt->pages, spt_entry_hash, spt_entry_less, NULL);
 }
 
-/* src의 보조 페이지 테이블을 dst로 복사한다. */
+// src 보조 페이지 테이블을 dst로 복사
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst,
                               struct supplemental_page_table *src) {

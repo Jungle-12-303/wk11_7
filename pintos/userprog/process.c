@@ -1124,8 +1124,8 @@ load (const char *file_name, struct intr_frame *if_) {
 	char *argv[64];
 	char *fn_copy = NULL;
 	int argc = 0;
-	
-	if(!setup_process_address_space (t))
+
+	if (!setup_process_address_space (t))
 		goto done;
 
 	fn_copy = copy_command_line (file_name);
@@ -1133,11 +1133,11 @@ load (const char *file_name, struct intr_frame *if_) {
 	if (fn_copy == NULL)
 		goto done;
 
-	if(!parse_command_line (fn_copy, argv, &argc, sizeof argv / sizeof *argv))
+	if (!parse_command_line (fn_copy, argv, &argc, sizeof argv / sizeof *argv))
 		goto done;
 
 	file = open_executable (argv[0]);
-	
+
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
@@ -1150,13 +1150,12 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	if (!load_program_headers (file, &ehdr))
 		goto done;
-	
-	if(!setup_initial_stack (if_, argv, argc))
+
+	if (!setup_initial_stack (if_, argv, argc))
 		goto done;
 
 	if_->rip = ehdr.e_entry;
 	success = true;
-
 
 done:
 	if (fn_copy != NULL)
@@ -1315,8 +1314,7 @@ lazy_load_segment (struct page *page, void *aux_) {
 	GOTO_IF (aux == NULL || aux->file == NULL, done);
 
 	lock_acquire (&filesys_lock);
-	if (file_read_at (aux->file, kva, aux->read_bytes, aux->ofs)
-	    == (off_t) aux->read_bytes) {
+	if (file_read_at (aux->file, kva, aux->read_bytes, aux->ofs) == (off_t) aux->read_bytes) {
 		memset (kva + aux->read_bytes, 0, aux->zero_bytes);
 		success = true;
 	}
@@ -1352,8 +1350,7 @@ done:
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
-	
-	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0); 
+	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
@@ -1373,7 +1370,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		aux->ofs = ofs;
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
-		
+
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage, writable,
 		                                     lazy_load_segment, aux)) {
 			file_close (aux->file);
