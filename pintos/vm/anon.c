@@ -4,7 +4,7 @@
 #include "devices/disk.h"
 #include "threads/mmu.h"
 #include "threads/malloc.h"
-
+#include <string.h>
 /* DO NOT MODIFY BELOW LINE */
 static struct disk *swap_disk;
 static bool anon_swap_in (struct page *page, void *kva);
@@ -42,13 +42,20 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 /* Swap in the page by read contents from the swap disk. */
 static bool
 anon_swap_in (struct page *page, void *kva) {
-	struct anon_page *anon_page = &page->anon;
+	RETURN_VALUE_IF(page == NULL || kva == NULL, false);
+	struct anon_page *anon_page UNUSED = &page->anon;
+
+	memset(kva, 0, PGSIZE); 
+	
+	return true;
 }
 
 /* Swap out the page by writing contents to the swap disk. */
 static bool
 anon_swap_out (struct page *page) {
-	struct anon_page *anon_page = &page->anon;
+	struct anon_page *anon_page UNUSED = &page->anon;
+
+	return false;
 }
 
 /* Destroy the anonymous page. PAGE will be freed by the caller. */
