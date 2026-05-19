@@ -7,6 +7,8 @@ struct page;
 enum vm_type;
 
 struct file_page {
+	size_t swap_idx;
+	bool swapped;
 };
 
 void vm_file_init (void);

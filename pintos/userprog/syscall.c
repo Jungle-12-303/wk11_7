@@ -154,6 +154,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_TELL:
 		f->R.rax = tell (f->R.rdi);
 		break;
+	case SYS_MMAP:
+		f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx,
+		                f->R.r10, f->R.r8);
+		break;
 	default:
 		break;
 	}
@@ -567,4 +571,13 @@ copy_in_string (const char *str, struct intr_frame *f) {
 
 	memcpy (kernel, str, len + 1);
 	return kernel;
+}
+
+static size_t*
+mmap(void *addr, size_t length, int writable, int fd, off_t offset){
+	RETURN_VALUE_IF(addr == NULL || length == 0, NULL);
+	struct file* file = thread_current()->fd_table[fd];
+	RETURN_VALUE_IF(file == NULL, NULL);
+	
+	do_mmap(addr, length, writable, file, offset);
 }

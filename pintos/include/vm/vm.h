@@ -85,6 +85,13 @@ struct page_operations {
 #define destroy(page) \
 	if ((page)->operations->destroy) (page)->operations->destroy (page)
 
+struct lazy_load_file_arg {
+	struct file *file;
+	off_t ofs;
+	size_t page_read_bytes;
+	size_t page_zero_bytes;
+};
+
 /* 현재 프로세스 메모리 공간의 표현.
  * 이 구조체 설계는 특정 방식으로 강제하지 않는다.
  * 설계는 전적으로 구현자 선택이다. */
