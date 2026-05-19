@@ -580,5 +580,5 @@ mmap(void *addr, size_t length, int writable, int fd, off_t offset){
 	struct file* file = thread_current()->fd_table[fd];
 	RETURN_VALUE_IF(file == NULL, NULL);
 
-	do_mmap(addr, length, writable, file, offset);
+	return do_mmap(addr, length, writable, file, offset);
 }

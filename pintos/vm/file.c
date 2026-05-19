@@ -88,7 +88,6 @@ do_mmap (void *addr, size_t length, int writable,
 		addr += PGSIZE;
 		offset += page_read_bytes;
 	}
-
 	
 	return start_addr;
 }
@@ -116,11 +115,6 @@ lazy_load_file (struct page *page, void *aux_) {
 
 	done:
 	if (aux != NULL) {
-		if (aux->file != NULL) {
-			lock_acquire (&file_lock);
-			file_close (aux->file);
-			lock_release (&file_lock);
-		}
 		free (aux);
 	}
 	return success;
